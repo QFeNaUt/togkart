@@ -66,6 +66,7 @@ python vedlikehold.py --status  # hva ligger i historikk.db
 python prober/sjekk_posisjon.py  # stemmer posisjonene med rutetabellen?
 python prober/sjekk_headere.py   # sikkerhetsheadere og CSP, uten nett
 python prober/sjekk_helse.py     # /api/health som overvåkingsmål, uten nett
+python prober/sjekk_mobil.py     # vises alt på telefon som vises på PC?
 ```
 
 Hele katalogen — prober, selvtester og hvilket skript som svarer på hvilket

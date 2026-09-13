@@ -28,6 +28,10 @@ __pycache__/
 # er delt og skal i git hvis den lages.
 .claude/settings.local.json
 
+# Skjermbildene fra prober/sjekk_mobil.py. De er et mellomresultat du ser på
+# og kaster, ikke noe å versjonere — og de er en halv megabyte per kjøring.
+prober/skjermbilder/
+
 # Editor og OS
 .vscode/
 .idea/
