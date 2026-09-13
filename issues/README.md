@@ -21,6 +21,11 @@ Løste saker er fjernet herfra etter hvert:
   var ikke arkivert, den er den første kommandoen i README.
 - **12** «ask() finnes i fem utgaver — samle i prober/felles.py» — 24. august.
   Én av de fem sjekket ikke `errors`, og løy derfor om skjemaet.
+- **22** «Historikken logges bare når noen ser på kartet» — 14. september.
+  En bakgrunnsjobb i `livslop()` kaller `get_snapshot()` hvert 60. sekund.
+  Den kaller ikke noe annet, så det er fortsatt én vei inn til cachen og
+  historikken, bak samme lås. Intervallet er ikke `CACHE_TTL`: det er
+  intervallet, ikke trafikken, som bestemmer databasens størrelse.
 - **08** «togkart.no er ikke i Cloudflare, så kantvernet finnes ikke» —
   13. september. Saken sto på feil domene hele veien: det heter `togkartet.no`,
   og det er registrert hos Uniweb, ikke Domeneshop. Sonen er nå på Cloudflare

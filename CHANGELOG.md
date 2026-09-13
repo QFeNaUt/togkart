@@ -105,6 +105,82 @@ gjennom kanten.
 
 ---
 
+## 14. september 2026 — historikken slutter å avhenge av at noen ser på
+
+Issue 22, og den var større enn tittelen sa.
+
+**Funnet som gjorde den prioritert.** Fordelingen over døgnet i sju døgns
+data:
+
+```
+05 UTC     990   ##
+06 UTC   4 929   ###########
+07 UTC       0            <- ingenting
+17 UTC  15 214   ###################################
+20 UTC  17 374   ########################################
+```
+
+Togtrafikken varierer ikke slik mellom morgen og kveld. Dette var et mål på
+når nettleseren sto åpen. Og det er verre enn hull i en logg: `rushtidsprofil()`
+i `analyse.py` leser de rå radene direkte gjennom `_hent_rader()`, så
+rushtidsprofilen ble regnet ut av et utvalg vektet etter surfevaner — med
+morgenrushet som den dårligst dekkede delen av døgnet.
+
+**Løsningen er ett kall.** En jobb i `livslop()` kaller `get_snapshot()` med
+jevne mellomrom og gjør ingenting annet. Issuet fryktet at en poller ville
+gjøre cachen til «noe to ting skriver til»; det unngås ved at de to kallerne
+deler skriveren i stedet for å ha hver sin. Ingen duplisert logikk, ingen ny
+feilhåndtering, samme lås.
+
+**Intervallet er 60 sekunder, ikke `CACHE_TTL`.** Det er den eneste
+avgjørelsen i saken som var vanskelig. `logg_snapshot` skriver når et tog har
+flyttet seg over 50 m, og et tog i 100 km/t gjør det på under to sekunder — så
+ved ethvert intervall over ti sekunder logges praktisk talt hvert tog ved hver
+runde. Da er det intervallet, ikke trafikken, som bestemmer størrelsen:
+
+```
+hvert 10. sekund   ~864 000 rader/døgn    20 GB på 90 dager
+hvert 60. sekund   ~144 000 rader/døgn   3,3 GB
+```
+
+Målt på en testkjøring: 56 rader i første runde (alle tog ukjente), deretter
+20–37 per runde av 56 aktive tog. Anslaget holder.
+
+60 er dessuten det som bevarer datatettheten: observasjonene fra august ligger
+på én per tog hvert 49. sekund, og et raskere intervall ville brutt med
+grunnlaget de historiske tallene er regnet ut fra uten å gi bedre tall.
+
+**En lekkasje som ble innført og lukket i samme endring.** `historikk._siste`
+husker siste posisjon per tog og ble aldri tømt. Det gikk bra så lenge
+prosessen ble startet om stadig vekk under utvikling; med en jobb som kjører i
+måneder er det ~1 200 nye tog-ID-er i døgnet som aldri slippes. Nå bærer hver
+oppføring et `time.monotonic()`-stempel, og tog som ikke er sett på en time
+glemmes. Stempelet oppdateres for hvert tog i snapshotet, ikke bare for dem
+som logges — ellers ville et tog som står stille på en perrong blitt glemt
+mens det fortsatt var på kartet.
+
+**Jobben rapporterer seg selv** i `/api/health` under `poller`, av samme grunn
+som `strupe` gjør det: en bakgrunnsjobb som har stoppet ser nøyaktig ut som en
+som virker, helt til noen leter etter hull en uke senere.
+`sisteOkSekunderSiden` vesentlig over `intervallSekunder` betyr at den står.
+
+**`TOGKART_POLLER=av`** stopper den uten en utrulling.
+
+**Testet før utrulling:** ny `historikk.py --selvtest` med tretten sjekker på
+minnelogikken, lagt til i CI. Bekreftet at probene ikke starter jobben ved et
+uhell — `TestClient(app)` uten `with` kjører ikke lifespan. Bekreftet ren
+avslutning gjennom lifespan med `RuntimeWarning` som feil. Bekreftet at
+nødbryteren virker.
+
+**Driftstallene i `drift/README.md` er merket som anslag.** 5 MB i døgnet og
+443 MB i likevekt ble målt på det samme skjeve utvalget. Anslaget nå er ~37 MB
+og ~3,3 GB, men det skal måles det første døgnet i stedet for å stoles på.
+
+**Sideeffekt:** cachen holdes alltid varm. En kald henting er blitt sjelden i
+stedet for vanlig, så både `/api/trains` og `/api/health` svarer raskere.
+
+---
+
 ## 13. september 2026, sent — kanten satt opp, og en megabyte funnet
 
 Fortsettelse av utrullingen samme kveld. Alt her er i Cloudflare-dashbordet,

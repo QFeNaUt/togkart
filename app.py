@@ -152,15 +152,28 @@ async def livslop(app: FastAPI):
 
     sjekk_taket(MAKS_DAGER)
 
-    jobb = asyncio.create_task(_vedlikeholdsjobb())
+    # To bakgrunnsjobber. `_pollerjobb` er definert lenger ned i fila, etter
+    # `get_snapshot()` som er det eneste den kaller - navnet slås opp når denne
+    # funksjonen KJØRER, altså etter at hele modulen er lastet.
+    jobber = [asyncio.create_task(_vedlikeholdsjobb())]
+    if POLLER_PAA:
+        jobber.append(asyncio.create_task(_pollerjobb()))
+    else:
+        log.warning(
+            "TOGKART_POLLER er av. Historikken logges bare når noen ser på "
+            "kartet, og da får døgnet hull der ingen gjorde det."
+        )
+
     try:
         yield
     finally:
-        jobb.cancel()
-        # Vent på at den faktisk er borte. Uten dette kan uvicorn rekke å
-        # lukke event-loopen mens tråden fra `to_thread` fortsatt skriver.
-        with contextlib.suppress(asyncio.CancelledError):
-            await jobb
+        for jobb in jobber:
+            jobb.cancel()
+        # Vent på at de faktisk er borte. Uten dette kan uvicorn rekke å lukke
+        # event-loopen mens tråden fra `to_thread` fortsatt skriver.
+        for jobb in jobber:
+            with contextlib.suppress(asyncio.CancelledError):
+                await jobb
 
 
 # Interaktiv API-dokumentasjon på /api/docs er et utmerket verktøy mens du
@@ -770,6 +783,96 @@ async def get_snapshot() -> tuple[dict, str | None]:
         return _cache["payload"], None
 
 
+# ---------------------------------------------------------------------------
+# Bakgrunnsjobb: historikken skal ikke avhenge av at noen ser på
+# ---------------------------------------------------------------------------
+# Til 14. september ble historikken bare skrevet når `/api/trains` måtte hente
+# på nytt - altså når en nettleser sto åpen. Målt på sju døgn: klokka ni om
+# morgenen hadde NULL observasjoner, mens kveldstimene hadde tolv ganger så
+# mange som morgenrushet. Det var ikke togtrafikken som varierte slik; det var
+# når noen så på kartet. Og `rushtidsprofil()` i analyse.py leser nettopp de
+# rå radene.
+#
+# Jobben kaller `get_snapshot()` og ingenting annet. Det er med vilje: da er
+# det fortsatt ÉN vei inn til cachen og til historikken, bak samme lås. Issuet
+# fryktet at cachen ble «noe to ting skriver til» - det unngås ved at de to
+# kallerne deler skriveren i stedet for å ha hver sin.
+#
+# INTERVALLET ER IKKE CACHE_TTL, og det er et bevisst valg. `logg_snapshot`
+# skriver når et tog har flyttet seg over 50 m, og et tog i 100 km/t gjør det
+# på under to sekunder - så ved ethvert intervall over ti sekunder logges
+# praktisk talt hvert tog ved hver runde. Da er det intervallet, ikke
+# trafikken, som bestemmer hvor stor databasen blir:
+#
+#     hvert 10. sekund   ~864 000 rader/døgn    20 GB på 90 dager
+#     hvert 60. sekund   ~144 000 rader/døgn   3,3 GB
+#
+# Observasjonene fra august ligger på én per tog hvert 49. sekund i snitt. 60
+# sekunder holder derfor datatettheten på det analysene allerede er innstilt
+# på. Et raskere intervall ville ikke gitt bedre tall, bare flere rader - og
+# et brudd med grunnlaget de historiske tallene er regnet ut fra.
+POLLER_SEKUNDER = float(os.getenv("TOGKART_POLLER_SEKUNDER", "60"))
+
+# Nødbryter. Skal jobben stoppes i produksjon, skal det ikke kreve en
+# kodeendring, et bygg og en utrulling.
+POLLER_PAA = os.getenv("TOGKART_POLLER", "på").strip().lower() not in (
+    "av", "off", "0", "nei", "false"
+)
+
+# Det jobben rapporterer om seg selv. En bakgrunnsjobb ingen ser på er en jobb
+# du ikke vet noe om - nøyaktig samme lærdom som helsesjekken selv bygger på.
+_poller: dict = {"runder": 0, "feil": 0}
+_poller_sist_ok: float | None = None
+
+
+async def _pollerjobb() -> None:
+    """Hent et snapshot med jevne mellomrom, uansett om noen ser på kartet."""
+    global _poller_sist_ok
+
+    # Et øyeblikks pause først: uvicorn skal være ferdig med å binde porten før
+    # vi legger beslag på hendelsesløkka med et Entur-kall som tar et par
+    # sekunder kaldt.
+    await asyncio.sleep(2)
+
+    log.info(
+        "Bakgrunnsjobb for historikk: henter hvert %.0f. sekund", POLLER_SEKUNDER
+    )
+    while True:
+        try:
+            # `get_snapshot` svelger selv nettverksfeil og returnerer forrige
+            # payload med en feilmelding. Den kaster bare på det uventede.
+            _, feil = await get_snapshot()
+            _poller["runder"] += 1
+            if feil:
+                _poller["feil"] += 1
+                log.warning("Bakgrunnsjobben fikk ikke ferske tall: %s", feil)
+            else:
+                _poller_sist_ok = time.monotonic()
+        except Exception as exc:  # noqa: BLE001 - aldri velte serveren for dette
+            # CancelledError arver fra BaseException og fanges IKKE her, så en
+            # avslutning kommer fortsatt fram. Det er hele grunnen til at dette
+            # er `Exception` og ikke `BaseException`.
+            _poller["feil"] += 1
+            log.warning("Bakgrunnsjobben feilet: %s", exc)
+
+        await asyncio.sleep(POLLER_SEKUNDER)
+
+
+def pollerstatus() -> dict:
+    """Tilstanden til bakgrunnsjobben, til /api/health."""
+    return {
+        "aktiv": POLLER_PAA,
+        "intervallSekunder": POLLER_SEKUNDER if POLLER_PAA else None,
+        "runder": _poller["runder"],
+        "feil": _poller["feil"],
+        "sisteOkSekunderSiden": (
+            None
+            if _poller_sist_ok is None
+            else round(time.monotonic() - _poller_sist_ok)
+        ),
+    }
+
+
 @app.get("/api/trains")
 async def trains() -> JSONResponse:
     """Alle aktive tog som GeoJSON."""
@@ -1088,6 +1191,11 @@ async def health() -> JSONResponse:
             "trains": (payload or {}).get("meta", {}).get("count"),
             "alderSekunder": alder,
             "strupe": strupestatus(),
+            # Av samme grunn som `strupe`: en bakgrunnsjobb som har stoppet
+            # ser nøyaktig ut som en som virker, helt til noen ser etter hull
+            # i historikken en uke senere. `sisteOkSekunderSiden` vesentlig
+            # over `intervallSekunder` betyr at den står.
+            "poller": pollerstatus(),
         },
     )
 

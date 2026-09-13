@@ -25,6 +25,7 @@ import contextlib
 import logging
 import os
 import sqlite3
+import time
 from datetime import datetime, timezone
 
 from sporgeometri import avstand_m
@@ -101,13 +102,48 @@ _TILLEGGSKOLONNER = {
     "operator": "TEXT",
 }
 
-# Siste loggede (lat, lon, delay) per tog. Holdt i minnet, ikke slått opp i
-# databasen ved hver henting - vi husker forrige verdi selv i stedet for å
+# Siste loggede (lat, lon, delay, sett) per tog. Holdt i minnet, ikke slått opp
+# i databasen ved hver henting - vi husker forrige verdi selv i stedet for å
 # spørre etter den. Nullstilles ved omstart av serveren, så første snapshot
 # etter en omstart logger alle aktive tog på nytt. Det er riktig oppførsel:
 # databasen skal vite at prosessen startet på nytt, ikke late som om den
 # kjente togenes historie fra før.
-_siste: dict[str, tuple[float, float, float | None]] = {}
+#
+# `sett` er `time.monotonic()` fra sist toget var med i et snapshot, og den
+# kom til 14. september. Til da ble ingenting fjernet fra denne dicten, og det
+# gikk bra så lenge prosessen ble startet om stadig vekk under utvikling. Med
+# en bakgrunnsjobb som poller døgnet rundt er det en lekkasje: rundt 1 200 nye
+# tog-ID-er i døgnet som aldri slippes.
+_siste: dict[str, tuple[float, float, float | None, float]] = {}
+
+# Hvor lenge et tog huskes etter at det sist var i et snapshot.
+#
+# En time er rundhåndet med vilje. Kostnaden ved å glemme for tidlig er
+# nøyaktig én ekstra rad - toget dukker opp som ukjent og logges på nytt - og
+# et fjerntog kan ha lange GPS-hull uten å være ferdig. Kostnaden ved å glemme
+# for sent er noen kilobyte.
+GLEMSEL_SEKUNDER = float(os.getenv("HISTORIKK_GLEMSEL_SEKUNDER", "3600"))
+
+# Ryddingen går gjennom hele dicten, så den gjøres sjelden og ikke ved hvert
+# snapshot.
+RYDDE_INTERVALL = 600.0
+_sist_ryddet = 0.0
+
+
+def _rydd_siste(naa: float) -> int:
+    """Slipp tog vi ikke har sett på en stund. Returnerer antall fjernet."""
+    global _sist_ryddet
+    if naa - _sist_ryddet < RYDDE_INTERVALL:
+        return 0
+    _sist_ryddet = naa
+
+    doede = [t for t, v in _siste.items() if naa - v[3] > GLEMSEL_SEKUNDER]
+    for tog_id in doede:
+        del _siste[tog_id]
+    if doede:
+        log.debug("Glemte %d tog som ikke er sett på %.0f minutter (%d igjen)",
+                  len(doede), GLEMSEL_SEKUNDER / 60, len(_siste))
+    return len(doede)
 
 
 # Alle NeTEx-ID-er fra Entur starter med kodeområdet til den som eide dataene:
@@ -365,7 +401,7 @@ def _skal_logges(tog_id: str, lat: float, lon: float, delay: float | None) -> bo
     if forrige is None:
         return True
 
-    forrige_lat, forrige_lon, forrige_delay = forrige
+    forrige_lat, forrige_lon, forrige_delay, _sett = forrige
     if avstand_m((forrige_lon, forrige_lat), (lon, lat)) > TERSKEL_M:
         return True
 
@@ -398,6 +434,7 @@ async def logg_snapshot(features: list[dict]) -> int:
     stoppe opp for. Returnerer antall rader skrevet, mest til bruk i tester.
     """
     now = datetime.now(timezone.utc).isoformat()
+    naa = time.monotonic()
     rader = []
 
     for feature in features:
@@ -407,9 +444,17 @@ async def logg_snapshot(features: list[dict]) -> int:
         delay = p.get("delay")
 
         if not _skal_logges(tog_id, lat, lon, delay):
+            # Toget er der, men har ikke flyttet seg nok til å bli en rad.
+            # Tidsstempelet skal likevel oppdateres: «sett» betyr at toget var
+            # med i et snapshot, ikke at det ble logget. Uten dette ville et
+            # tog som står stille på en perrong i en time blitt glemt av
+            # `_rydd_siste` og logget på nytt idet det rullet videre.
+            forrige = _siste.get(tog_id)
+            if forrige is not None:
+                _siste[tog_id] = (forrige[0], forrige[1], forrige[2], naa)
             continue
 
-        _siste[tog_id] = (lat, lon, delay)
+        _siste[tog_id] = (lat, lon, delay, naa)
         rader.append((
             tog_id, now, p.get("line") or "", p.get("trainNumber") or "",
             p.get("lineName") or "", _operator(p),
@@ -417,6 +462,10 @@ async def logg_snapshot(features: list[dict]) -> int:
             p.get("positionMethod"), 1 if p.get("computed") else 0,
             1 if p.get("stale") else 0,
         ))
+
+    # Før den tidlige returen: i en stille periode skrives ingen rader, og da
+    # ville ryddingen aldri kommet til.
+    _rydd_siste(naa)
 
     if not rader:
         return 0
@@ -428,3 +477,89 @@ async def logg_snapshot(features: list[dict]) -> int:
         return 0
 
     return len(rader)
+
+
+# ---------------------------------------------------------------------------
+# Selvtest
+# ---------------------------------------------------------------------------
+# Bare minnelogikken: hva som skal logges, og hva som skal glemmes. Ingenting
+# her rører databasen, så den kan kjøres i CI uten en `historikk.db`.
+#
+#     python historikk.py --selvtest
+
+
+def _selvtest() -> int:
+    global _siste, _sist_ryddet
+    feil = 0
+
+    def sjekk(hva: str, faktisk, ventet):
+        nonlocal feil
+        ok = faktisk == ventet
+        if not ok:
+            feil += 1
+        print(f"  {'OK  ' if ok else 'FEIL'}  {hva}"
+              + ("" if ok else f"   ventet {ventet!r}, fikk {faktisk!r}"))
+
+    def nullstill():
+        global _siste, _sist_ryddet
+        _siste = {}
+        _sist_ryddet = 0.0
+
+    print("1. Hva som logges")
+    nullstill()
+    sjekk("et ukjent tog logges", _skal_logges("T1", 59.91, 10.75, 0.0), True)
+    _siste["T1"] = (59.91, 10.75, 0.0, 1000.0)
+    sjekk("samme sted, samme avvik: nei",
+          _skal_logges("T1", 59.91, 10.75, 0.0), False)
+    # 50 m er terskelen. 0,001 grader breddegrad er ca. 111 m.
+    sjekk("flyttet over 50 m: ja",
+          _skal_logges("T1", 59.911, 10.75, 0.0), True)
+    sjekk("avvik endret over 30 s: ja",
+          _skal_logges("T1", 59.91, 10.75, 45.0), True)
+    sjekk("avvik endret under 30 s: nei",
+          _skal_logges("T1", 59.91, 10.75, 20.0), False)
+    sjekk("avvik ble borte: ja",
+          _skal_logges("T1", 59.91, 10.75, None), True)
+
+    print("\n2. Hva som glemmes")
+    nullstill()
+    naa = 100_000.0
+    _siste["ferskt"] = (59.9, 10.7, 0.0, naa - 60)
+    _siste["gammelt"] = (59.9, 10.7, 0.0, naa - GLEMSEL_SEKUNDER - 1)
+    fjernet = _rydd_siste(naa)
+    sjekk("ett tog glemt", fjernet, 1)
+    sjekk("det ferske står igjen", "ferskt" in _siste, True)
+    sjekk("det gamle er borte", "gammelt" in _siste, False)
+
+    print("\n3. Ryddingen går ikke ved hvert snapshot")
+    nullstill()
+    _siste["gammelt"] = (59.9, 10.7, 0.0, 0.0)
+    _rydd_siste(100_000.0)          # setter _sist_ryddet
+    _siste["gammelt2"] = (59.9, 10.7, 0.0, 0.0)
+    sjekk("for tidlig: ingenting fjernet",
+          _rydd_siste(100_000.0 + RYDDE_INTERVALL - 1), 0)
+    sjekk("etter intervallet: fjernet",
+          _rydd_siste(100_000.0 + RYDDE_INTERVALL + 1), 1)
+
+    print("\n4. Invarianten bak glemselen")
+    nullstill()
+    # En glemt tog-ID skal logges på nytt neste gang den dukker opp. Det er
+    # kostnaden ved å glemme, og den skal være nøyaktig én rad.
+    _siste["T2"] = (59.9, 10.7, 0.0, 0.0)
+    _rydd_siste(GLEMSEL_SEKUNDER + RYDDE_INTERVALL + 1)
+    sjekk("glemt tog logges på nytt", _skal_logges("T2", 59.9, 10.7, 0.0), True)
+
+    nullstill()
+    print()
+    if feil:
+        print(f"{feil} feil.")
+        return 1
+    print("Alt grønt.")
+    return 0
+
+
+if __name__ == "__main__":
+    import sys
+    if "--selvtest" in sys.argv:
+        sys.exit(_selvtest())
+    print(__doc__)
