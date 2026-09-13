@@ -105,6 +105,63 @@ gjennom kanten.
 
 ---
 
+## 13. september 2026, sent — kanten satt opp, og en megabyte funnet
+
+Fortsettelse av utrullingen samme kveld. Alt her er i Cloudflare-dashbordet,
+og alt er verifisert utenfra etterpå.
+
+**TLS.** Full (Strict), og **Always Use HTTPS** — den siste var den som
+manglet: `http://togkartet.no` svarte 200 uten omdirigering. Nå 301, ett hopp.
+HSTS står igjen med vilje; den kan ikke rulles tilbake.
+
+**Ratebegrensning: én regel, ikke tre.** `drift/cloudflare.md` foreskrev 3a,
+3b og 3c med ett-minutts vinduer. Free-planen gir `0/1 rules`, og `Period` har
+bare 10 sekunder. Det som står ute er `/api/` på 30 per 10 sekunder, Block i
+10 s.
+
+Terskelen er 30 og ikke 20, som delingen ville gitt. Et kort vindu er
+strengere enn tallet ser ut til: 120/minutt tåler en klump på 40 og så
+stillhet, 20/10 s gjør ikke. Ekte bruk er klumpete — fire API-kall ved
+sidelasting, noen til fra søket, dobbelt med to faner.
+
+Verifisert med 60 kall og 10 samtidige: 32 × 200, så 429. Og 429-en kom fra
+riktig sted — `CF-RAY: ...-OSL`, `Server: cloudflare`, og **ingen
+`content-security-policy`**. Hadde `strupe.py` svart, ville headeren vært der.
+Den er borte, altså nådde forespørselen aldri M720Q-en. `avviste: 0` i
+helsesjekken sier det samme fra andre siden.
+
+**Og så funnet: `.geojson` ble ikke cachet.**
+
+```
+app.js                 121 kB   HIT       Cloudflare betalte
+maplibre-gl.js         803 kB   HIT
+stasjoner.geojson       82 kB   DYNAMIC   DU betalte
+hovedbaner.geojson     185 kB   DYNAMIC
+jernbanenett.geojson   856 kB   DYNAMIC
+```
+
+Cloudflare cacher etter filendelse, og `.geojson` står ikke på lista. Hver
+sidelasting hentet 1,12 MB fra stua, opp hjemmelinja, mens JavaScripten kom
+fra Oslo. En cacheregel med én måneds edge-TTL senere: **67 kB fra opphavet
+per førstegangsbesøk i stedet for 1 196 kB.** Atten ganger mindre.
+
+Det er verdt å se mot driftsdokumentets «det som vokser med trafikken er
+statiske filer ut av din egen server». Det var sant, og det var den største
+posten — uten at noen hadde målt hvilke filer det gjaldt.
+
+**Kapasitet, regnet på 400/400 Mbit etter regelen:** hundre samtidige
+førstegangsbesøk er 6 MB gjennom tunnelen, altså 0,12 sekunder. Vedvarende
+polling fra hundre faner er 16 Mbit/s — 4 % av opplinja. Taket ligger ikke i
+sidelastingen men i pollingen, rundt 2 500 samtidige seere.
+
+**Målt underveis, ikke rettet:** Cloudflare komprimerer med zstd — `/api/trains`
+går fra 32 kB til 4,7 kB over nettet — men komprimeringen skjer på kanten.
+`app.py` har ingen `GZipMiddleware`, så uvicorn sender rått og tunnelen bærer
+rått. Besøkendes nedlasting er liten; opplinja betaler fullpris. Lagt som egen
+sak.
+
+---
+
 ## 24. august 2026 — én ask(), og en probe som løy
 
 De fem utgavene av «post GraphQL, sjekk `errors`» er samlet i

@@ -208,72 +208,109 @@ curl -sI https://togkartet.no/ | grep -i "content-security\|x-content-type\|refe
 Og åpne kartet med utviklerkonsollen oppe. Står det `Refused to load` der,
 mangler en kilde i policyen.
 
-### 2. Ikke server API-et fra cachen
+### 2. Cachereglene — to av dem
 
-**Rules → Caching Rules → Create rule.**
+**Caching → Cache Rules.** Begge satt opp 13. september og målt utenfra.
 
-Navn: `API utenom cache`. Uttrykk:
-
-```
-(starts_with(http.request.uri.path, "/api/"))
-```
-
-Handling: **Bypass cache**.
-
-Uten denne kan Cloudflare finne på å servere `/api/trains` fra kanten, og da
-viser kartet tog som var der for fem minutter siden — uten at noe ser galt ut.
-Den motsatte regelen er verdt å legge til samtidig: la `*.geojson`,
-`*.js` og `*.css` caches lenge. `jernbanenett.geojson` er 856 kB og endrer
-seg bare når du kjører byggeskriptene.
-
-### 3. Ratebegrensning (WAF Rate Limiting Rules)
-
-**Security → WAF → Rate limiting rules.** Tre regler, strengest først.
-
-Alle tre: **Characteristics: IP**, og handling **Block** med
-**Duration: 10 seconds** (mitigation timeout 10 s — nok til å bryte en
-hamring, kort nok til at et feilklikk ikke låser noen ute i et minutt).
-
-#### 3a. Søket — strengest, fordi det koster deg noe hos andre
+**`API utenom cache`**
 
 ```
-Uttrykk:   (starts_with(http.request.uri.path, "/api/search"))
-Rate:      20 requests per 1 minute
-Handling:  Block, 10 s
+Uttrykk:   starts_with(http.request.uri.path, "/api/")
+Handling:  Bypass cache
 ```
 
-Dette er endepunktet som går videre til Entur under ditt `ET_CLIENT_NAME`.
-20 i minuttet er fire ganger det å skrive «Trondheim S» bokstav for bokstav
-koster, og søkecachen i `app.py` (ti minutter per søkeord) tar de fleste av
-dem før de blir et kall ut.
+Uten den kan Cloudflare finne på å servere `/api/trains` fra kanten, og da
+viser kartet tog som var der for fem minutter siden — med riktig format,
+riktig antall og riktige farger. Ingenting ser galt ut. Det er den verste
+sorten feil.
 
-#### 3b. Statistikken — billig å be om, dyr å svare på
+Merk at `/api/` svarer `cf-cache-status: DYNAMIC` både med og uten regelen:
+stiene har ingen filendelse Cloudflare cacher som standard, så utfallet var
+riktig fra før. Regelen er et vern mot at standardoppførselen endrer seg
+uten at noen sier fra, ikke en retting av noe som var galt.
 
-```
-Uttrykk:   (starts_with(http.request.uri.path, "/api/statistikk/") or
-            starts_with(http.request.uri.path, "/api/flaskehalser"))
-Rate:      30 requests per 1 minute
-Handling:  Block, 10 s
-```
-
-Et kaldt oppslag leser hele tidsvinduet ut av SQLite og regner medianer i
-Python. `dager` spenner 1–90 og er med i cachenøkkelen, så én klient kan
-tvinge fram 180 forskjellige kalde utregninger per femminuttersvindu.
-
-#### 3c. Resten av API-et
+**`GeoJSON caches lenge`**
 
 ```
-Uttrykk:   (starts_with(http.request.uri.path, "/api/"))
-Rate:      120 requests per 1 minute
-Handling:  Block, 10 s
+Uttrykk:     ends_with(http.request.uri.path, ".geojson")
+Handling:    Eligible for cache
+Edge TTL:    1 måned  (ignorer cache-control fra origin)
+Browser TTL: 1 dag
 ```
 
-Tre faner som poller `/api/trains` hvert 15. sekund er 12 i minuttet. 120 gir
-ti ganger det.
+**Denne var ikke pynt.** Målt før den ble lagt inn:
 
-> **Statiske filer trenger ingen regel.** De ligger i Cloudflare-cachen (regel
-> 2) og treffer aldri maskinen din. Vil du likevel ha en, sett den høyt —
-> 300/min — og husk at én sidelasting er rundt sju forespørsler.
+```
+app.js                 121 kB   HIT       Cloudflare betaler
+maplibre-gl.js         803 kB   HIT
+app.css + theme.css     32 kB   HIT
+stasjoner.geojson       82 kB   DYNAMIC   DU betaler
+hovedbaner.geojson     185 kB   DYNAMIC
+jernbanenett.geojson   856 kB   DYNAMIC
+```
+
+Cloudflare cacher etter filendelse som standard, og `.geojson` står ikke på
+lista. Hver eneste sidelasting hentet altså **1,12 MB GeoJSON fra
+M720Q-en**, opp hjemmelinja, mens de 954 kB med JavaScript ble servert fra
+Oslo. Etter regelen: 67 kB fra opphavet per førstegangsbesøk i stedet for
+1 196 kB. **Attenkeren mindre.**
+
+Én måned i edge-TTL er trygt fordi filene bare endres av byggeskriptene, og
+de kjører ikke i produksjon. Oppdaterer du banegeometrien, må du tømme
+cachen manuelt (**Caching → Configuration → Purge Everything**).
+
+### 3. Ratebegrensning — én regel, ikke tre
+
+**Security → Security rules → Rate limiting rules.**
+
+Dette punktet beskrev fram til 13. september tre regler — 3a for søket,
+3b for statistikken, 3c for resten — hver med et ett-minutts vindu. **Ingen
+av delene kan gjøres på Free-planen.** Dashbordet sier `0/1 rules`, og
+`Period` har bare ett valg: 10 sekunder. Ett minutt krever Pro.
+
+Det som står ute:
+
+```
+Navn:              API-struping
+Uttrykk:           starts_with(http.request.uri.path, "/api/")
+Characteristics:   IP
+Rate:              30 requests per 10 seconds
+Handling:          Block
+Duration:          10 seconds
+```
+
+**30 og ikke 20, som delingen ville gitt.** 120 per minutt tåler at noen
+bruker 40 forespørsler på tre sekunder og så er stille; 20 per 10 sekunder
+gjør det ikke. Og ekte bruk er klumpete: en sidelasting fyrer av fire
+API-kall med én gang, søket koster noen til, og to faner dobler alt. Et kort
+vindu er strengere enn tallet ser ut til, så terskelen må opp for å
+kompensere.
+
+Prinsippet, som er verdt mer enn tallet: **still en ratebegrensning slik at
+den aldri treffer en ekte bruker.** Det den skal stoppe gjør titalls kall i
+sekundet, ikke to — forskjellen mellom 20 og 30 betyr ingenting for den, og
+alt for deg med tre faner åpne. En grense som blokkerer én av tjue besøkende
+blir slått av etter en uke, og da har du ingen.
+
+**Verifisert utenfra**, 60 kall med 10 samtidige:
+
+```
+32 x 200, så 429 for resten
+
+HTTP/1.1 429 Too Many Requests
+Server: cloudflare
+CF-RAY: a3aa52723895712a-OSL
+Content-Type: text/plain
+Retry-After: 9
+```
+
+`CF-RAY` slutter på `OSL`: stoppet i Oslo, aldri ned opplinja. Det
+avgjørende er hva som **mangler** — ingen `content-security-policy`. Hadde
+`strupe.py` svart, ville headeren vært der, satt av middleware etter at
+forespørselen nådde uvicorn. Den er borte, altså nådde den aldri M720Q-en.
+`avviste: 0` i `/api/health` bekrefter det samme fra andre siden.
+
+Slik skiller du de to 429-ene fra hverandre når du feilsøker senere.
 
 ### 4. Det Cloudflare ikke kan gjøre for deg
 
@@ -315,6 +352,34 @@ bakstopperen gjør jobb Cloudflare skulle tatt — sjekk at reglene i punkt 3
 faktisk er aktive.
 
 ---
+
+### 5. TLS-innstillingene
+
+**SSL/TLS → Overview → Configure.** Satt 13. september.
+
+| Innstilling | Verdi |
+|---|---|
+| Encryption mode | **Full (Strict)** |
+| Always Use HTTPS | **På** |
+| Minimum TLS Version | 1.2 |
+| HSTS | **av inntil videre** |
+
+Nye soner står på **Automatic SSL/TLS**, som lar Cloudflare velge selv — den
+sto på `Full` da den ble sjekket. Full (Strict) krever normalt et gyldig
+sertifikat på opphavsserveren, men med tunnel finnes det ingen TCP-forbindelse
+til et origin i det hele tatt: `cloudflared` bærer trafikken over sin egen
+autentiserte QUIC-forbindelse. Innstillingen kan altså ikke bryte noe, og den
+er riktig posisjon hvis oppsettet en gang endres.
+
+**Always Use HTTPS var den som manglet.** Målt før: `http://togkartet.no`
+svarte 200 uten omdirigering. Målt etter: 301 til `https://`, ett hopp.
+Advarselen om omdirigeringssløyfer gjelder ikke her — `app.py` har ingen egen
+HTTPS-omdirigering.
+
+**HSTS står igjen med vilje.** Den instruerer nettleseren om å nekte ren HTTP
+mot domenet i hele max-age-perioden, og den kan ikke rulles tilbake ved å slås
+av: nettleserne husker uansett. Slå den på når oppsettet har stått et døgn, med
+seks måneder og **uten** preload.
 
 ## Testing
 
