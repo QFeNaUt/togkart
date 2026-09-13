@@ -22,23 +22,32 @@ VENT=60
 cd "$ROT"
 
 # `runuser` og ikke `sudo`: sudo er ikke installert i et minimalt Debian-image,
-# runuser ligger i util-linux og er alltid der. Og koden må hentes som
-# `togkart`, ikke root - ellers eier root plutselig filer i et tre som
-# systemd-tjenesten kjører under en annen bruker.
-foer=$(git rev-parse HEAD)
-runuser -u "$BRUKER" -- git pull --ff-only
-etter=$(git rev-parse HEAD)
+# runuser ligger i util-linux og er alltid der.
+#
+# ALLE git-kall går som `togkart`, ikke bare `pull`. Første utgave av dette
+# skriptet kjørte `rev-parse` og `log` som root, og da stoppet git med
+# «detected dubious ownership»: repoet eies av togkart, og git nekter å kjøre
+# i et tre som eies av noen andre enn den som kaller.
+#
+# Fristelsen er å legge inn `safe.directory` for root. Ikke gjør det - da kan
+# root legge igjen root-eide filer i .git, og neste `git pull` som togkart
+# feiler på rettigheter i stedet. Kjør som eieren.
+g() { runuser -u "$BRUKER" -- git "$@"; }
+
+foer=$(g rev-parse HEAD)
+g pull --ff-only
+etter=$(g rev-parse HEAD)
 
 if [ "$foer" = "$etter" ]; then
     echo "Ingen nye innsjekkinger. Starter om likevel."
 else
-    echo "Oppdatert: $(git log --oneline "$foer..$etter" | wc -l) innsjekking(er)"
-    git log --oneline "$foer..$etter"
+    echo "Oppdatert: $(g log --oneline "$foer..$etter" | wc -l) innsjekking(er)"
+    g log --oneline "$foer..$etter"
 fi
 
 # Bare når fila faktisk er endret. Et `pip install` på hver utrulling er
 # et nettverkskall og en risiko uten gevinst.
-if ! git diff --quiet "$foer" "$etter" -- requirements.txt; then
+if ! g diff --quiet "$foer" "$etter" -- requirements.txt; then
     echo "requirements.txt er endret - installerer på nytt"
     runuser -u "$BRUKER" -- "$ROT/.venv/bin/pip" install -q -r requirements.txt
 fi
@@ -51,7 +60,7 @@ for _ in $(seq 1 "$VENT"); do
         echo
         echo "$svar"
         echo
-        echo "OK - $(git rev-parse --short HEAD) er ute."
+        echo "OK - $(g rev-parse --short HEAD) er ute."
         exit 0
     fi
     echo -n "."
