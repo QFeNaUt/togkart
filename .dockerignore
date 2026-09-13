@@ -1,0 +1,63 @@
+# Byggekonteksten. Alt som ikke står her, sendes til Docker-daemonen ved hvert
+# bygg - og uten denne fila er det 55 MB database og et .venv på kjøpet.
+
+# Virtuelt miljø og mellomlager. Bygget installerer sine egne pakker, og et
+# Windows-.venv ville uansett vært ubrukelig i et linux-image.
+.venv/
+venv/
+
+# `**/` er ikke pynt: Dockers ignoreringsmønstre er IKKE rekursive av seg
+# selv. `__pycache__/` alene traff bare roten, og `prober/__pycache__` fulgte
+# med inn i imaget - målt ved å lete etter den i en kjørende container.
+**/__pycache__/
+**/*.py[cod]
+
+# Databasen. Den skal komme fra bind mountet, ikke fra imaget. Ligger den
+# inne, får du en kopi som er frosset på byggetidspunktet og som forsvinner
+# neste gang du bygger. I WAL-modus er den dessuten tre filer.
+*.db
+*.db-wal
+*.db-shm
+*.sqlite3
+historikk-backup-*
+
+# Konfigurasjon. `.env` leses av compose på serveren og sendes inn som
+# `env_file`; bakt inn i imaget ville den fulgt med enhver som får imaget.
+.env
+.env.tunnel
+.env.example
+
+# Byggeskriptene. «Kjør dem lokalt, sjekk inn resultatet, la containeren
+# servere det» - drift/README.md. Er de ikke i imaget, kan de heller ikke
+# kjøres der ved et uhell. Ingenting i kjøreveien importerer dem; bare
+# lagjernbanenett.py importerer lagbaner.py, og begge går ut her.
+lagbaner.py
+lagjernbanenett.py
+lagstasjoner.py
+
+# Dokumentasjon, saker og historikk. Hører hjemme i git, ikke i et kjørende
+# image. `prober/` og `sjekk.py` blir derimot MED - de er verktøy, ikke tekst.
+#
+# `drift/` sto her til det ble målt: `prober/sjekk_headere.py` punkt 5 leser
+# `drift/cloudflare.md` for å sjekke at app.py og dokumentasjonen sier det
+# samme om CSP-en, og falt på FileNotFoundError inne i containeren. En probe
+# som ikke kan kjøre der den skal brukes, er ingen probe. 35 kB markdown.
+docs/
+issues/
+CHANGELOG.md
+README.md
+LICENSE
+*.png
+
+# Git og verktøy
+.git/
+.gitattributes
+.github/
+.claude/
+.vscode/
+.idea/
+
+# Containerfilene selv. De er inndata til bygget, ikke innhold i imaget.
+Dockerfile
+compose.yaml
+.dockerignore

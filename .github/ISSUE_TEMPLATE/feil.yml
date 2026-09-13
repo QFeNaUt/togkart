@@ -1,0 +1,46 @@
+name: Feil
+description: Noe viser feil, mangler, eller oppfører seg annerledes enn dokumentert
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Kjør `python sjekk.py alle` først. Feilsøkingstabellen i
+        `docs/feilsoking.md` sier hvilket skript som svarer på hvilket symptom.
+
+  - type: textarea
+    id: symptom
+    attributes:
+      label: Symptom
+      description: Hva ser du, og hva ventet du å se?
+    validations:
+      required: true
+
+  - type: textarea
+    id: maling
+    attributes:
+      label: Måling
+      description: >
+        Utskrift fra proben eller helsesjekken, ikke bare beskrivelsen.
+        Et tall som ser plausibelt ut er ikke det samme som et riktig tall.
+      render: text
+    validations:
+      required: false
+
+  - type: input
+    id: fasit
+    attributes:
+      label: Hva er målt mot
+      description: >
+        togkart.banenor.no, en selvtest, en tidligere måling — og er fasiten
+        selv kontrollert? Se docs/erfaringer.md, lærdom 13.
+    validations:
+      required: false
+
+  - type: textarea
+    id: gjenskape
+    attributes:
+      label: Slik gjenskapes det
+      description: Kommandoer, zoomnivå, tidspunkt på døgnet.
+    validations:
+      required: false

@@ -1,0 +1,37 @@
+name: Forbedring
+description: Noe nytt som skal bygges
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: hva
+    attributes:
+      label: Hva
+      description: Én setning om hva som skal finnes etterpå.
+    validations:
+      required: true
+
+  - type: textarea
+    id: hvorfor
+    attributes:
+      label: Hvorfor
+      description: Hvilket spørsmål svarer dette på som ingenting svarer på i dag?
+    validations:
+      required: true
+
+  - type: textarea
+    id: finnes
+    attributes:
+      label: Hva finnes allerede
+      description: >
+        Felt, endepunkter eller moduler som kan gjenbrukes. Halvparten av
+        veikartpunktene i dette prosjektet viste seg å være halvbygget.
+    validations:
+      required: false
+
+  - type: textarea
+    id: avhenger
+    attributes:
+      label: Avhenger av
+      description: Andre issues som må være lukket først.
+    validations:
+      required: false

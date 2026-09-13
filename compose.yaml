@@ -1,0 +1,111 @@
+# TogKart med Cloudflare Tunnel, på M720Q-en.
+#
+#     docker compose up -d
+#     docker compose logs -f togkart
+#     docker compose exec togkart python sjekk.py alle
+#
+# DET ENE VALGET SOM ER LETT Å GJØRE FEIL står i `network_mode` under:
+# cloudflared deler nettverksnavnerom med appen. Da kobler den seg til
+# 127.0.0.1:8000 innenfra, og forespørslene NÅR appen fra loopback - som er
+# nøyaktig betingelsen `_loopback()` i strupe.py krever før den stoler på
+# `CF-Connecting-IP`.
+#
+# Kjører cloudflared som en vanlig nabocontainer i stedet, kommer trafikken
+# fra docker-broen (172.x). Da er betingelsen usann, headeren ignoreres i
+# stillhet, og strupen teller hele internett i én bøtte. Symptomet kommer
+# først den dagen noen hamrer: alle besøkende strupes samtidig.
+#
+# Kontroll etter oppstart:
+#     curl -s https://togkart.no/api/health | grep bakCloudflare
+#     -> "bakCloudflare": true
+
+services:
+  togkart:
+    build: .
+    image: togkart:lokal
+    container_name: togkart
+    restart: unless-stopped
+
+    # `.env` på SERVEREN, ikke den lokale. Mal: drift/env.produksjon.
+    # TOGKART_BAK_CLOUDFLARE=1 hører hjemme her og ingen andre steder - i en
+    # lokal .env gjør det nøyaktig den forfalskningen det er ment å hindre.
+    env_file:
+      - .env
+
+    volumes:
+      # Bind mount, ikke containerens skrivelag. HISTORIKK_DB i .env må peke
+      # hit (/var/lib/togkart/historikk.db). Databasen er tre filer i
+      # WAL-modus, og stien må være lokal disk: over SMB eller NFS faller
+      # SQLite stille tilbake til journal_mode=delete, og appen advarer i
+      # loggen. Katalogen må eies av uid 10001:
+      #     sudo mkdir -p /var/lib/togkart
+      #     sudo chown -R 10001:10001 /var/lib/togkart
+      - /var/lib/togkart:/var/lib/togkart
+
+    # Ingen port publisert. Det eneste som skal nå appen er cloudflared, og
+    # den er inne i samme nettverksnavnerom - den trenger ingen åpning.
+    # Skal du røyktest uten tunnel, slå på linja under og åpne
+    # http://127.0.0.1:8000 på verten. Merk at alt da kommer fra docker-broen
+    # og ikke fra loopback, så `bakCloudflare` er uten virkning i den testen.
+    # ports:
+    #   - "127.0.0.1:8000:8000"
+
+    # Filsystemet er skrivebeskyttet bortsett fra bind mountet og /tmp. Målt
+    # 13. september 2026: appen startet, hentet fra Entur, svarte 200 på
+    # /api/health og skrev 282 observasjoner til historikk.db med dette på.
+    # PYTHONDONTWRITEBYTECODE i Dockerfile er halve grunnen til at det går -
+    # uten den ville Python villet legge .pyc-filer ved siden av koden.
+    read_only: true
+    tmpfs:
+      - /tmp
+
+    security_opt:
+      - no-new-privileges:true
+
+    # Loggen roterer ikke av seg selv i Docker. Uten dette vokser
+    # json-file-loggen til disken er full - på en maskin som skal stå i
+    # måneder er det ikke teoretisk.
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
+
+  cloudflared:
+    # `latest` med vilje. cloudflared er en klient mot Cloudflares kant og
+    # eldes raskere enn resten av dette - en pinnet tunnelklient er en tunnel
+    # som slutter å virke en gang til våren. Vil du likevel pinne, ta taggen
+    # fra `docker image inspect cloudflare/cloudflared:latest` etter første
+    # `docker compose pull`.
+    image: cloudflare/cloudflared:latest
+    container_name: togkart-cloudflared
+    restart: unless-stopped
+
+    # Se toppen av fila. Dette er linja som avgjør om strupen virker.
+    # Konsekvens av å dele navnerom: cloudflared har ingen egen
+    # nettverkskonfigurasjon - ingen `ports`, ingen `networks` - alt slikt
+    # hører hjemme på `togkart`.
+    network_mode: "service:togkart"
+
+    depends_on:
+      togkart:
+        condition: service_started
+
+    command: tunnel --no-autoupdate run
+
+    # Token fra Zero Trust -> Networks -> Tunnels, i sin egen fil. Den ligger
+    # ikke i `.env` fordi `.env` her er en fil drift/env.produksjon sier det
+    # ikke er noe hemmelig i - og det stemmer for den. Et tunneltoken er
+    # derimot en nøkkel: den som har det, kan kjøre tunnelen din.
+    #     echo "TUNNEL_TOKEN=ey..." > .env.tunnel && chmod 600 .env.tunnel
+    env_file:
+      - .env.tunnel
+
+    security_opt:
+      - no-new-privileges:true
+
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"

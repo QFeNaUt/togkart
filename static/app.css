@@ -1,0 +1,1074 @@
+/* Layout og komponenter. Fargene bor i theme.css — ingen hex her.
+   .panel, .subtitle, .pulse og .legend-* er tatt rett fra stromkart, slik at
+   de to appene deler visuelt språk. */
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  height: 100%;
+  background: var(--bg);
+  color: var(--text);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Inter, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+#map { position: absolute; inset: 0; }
+
+/* --- Panelflate (fra stromkart) ------------------------------------------ */
+
+.panel {
+  position: absolute;
+  background: var(--panel);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 16px 18px;
+  font-size: 13px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+  z-index: 10;
+}
+
+.subtitle {
+  color: var(--text-dim);
+  font-size: 11px;
+  letter-spacing: 0.6px;
+  text-transform: uppercase;
+  margin-bottom: 14px;
+}
+
+.pulse {
+  display: inline-block;
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  background: var(--c-low);
+  margin-right: 6px;
+  animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 0.4; }
+  50%      { opacity: 1; }
+}
+
+/* --- Datafarger ----------------------------------------------------------- *
+ * Fargen på et tall, en prikk eller en strek kommer fra dataene, ikke fra
+ * designet: hvilket punktlighetsbånd toget er i, hvor mye tid en strekning
+ * taper. Den sto som `style="color:..."` i markupen til 23. august, og de sju
+ * stedene var hele grunnen til at CSP-en måtte si `style-src 'unsafe-inline'`.
+ *
+ * Klassen setter bare `--f`. Komponenten under bestemmer om variabelen skal
+ * bli tekstfarge eller flatefarge — en fargeprøve vil ha den som bakgrunn, et
+ * tall som tekst, og det er komponenten som vet hvilken.
+ *
+ * Navnene utledes av variabelnavnet i `fargeklasse()` i app.js: `--c-low` blir
+ * `.f-c-low`. Legger du til en farge i theme.css og bruker den herfra, må den
+ * få en linje her — men bare her, og JS trenger ingen tabell. */
+
+.f-c-low     { --f: var(--c-low); }
+.f-c-mid     { --f: var(--c-mid); }
+.f-c-high    { --f: var(--c-high); }
+.f-c-vhigh   { --f: var(--c-vhigh); }
+.f-c-unknown { --f: var(--c-unknown); }
+
+/* Flaskehalsskalaen er divergerende og låner accent til den blå enden — de
+   strekningene der togene tar inn tid. Se FH_SKALA i app.js. */
+.f-accent    { --f: var(--accent); }
+
+/* --- Info: teller og fordeling ------------------------------------------- */
+
+/* Fast bredde, den samme som nyhetsstripa under — ikke min-width. Panelet er
+   absolutt plassert, og en boks uten bredde strekker seg til den lengste
+   linja i innholdet: spøkelsesavsnittet ble stående på én linje og dro
+   panelet tvers over kartet, med ringen svevende midt i et tomrom. Bredden
+   hører sammen med #nyheter: de står i samme kolonne, og to bokser over
+   hverandre med ulik kant leses som rot. Endres den ene, endres den andre.
+
+   Panelet blir høyere av det, og taket her er det samme som #historikk sitt:
+   når flaskehalsnoten og søketreffene står ute samtidig, skal panelet rulle
+   inni seg selv i stedet for å gå ut av skjermkanten. Tooltipen tåler det —
+   den henger på <body> nettopp for ikke å bli klippet av en overflow. */
+#info {
+  top: 16px;
+  left: 16px;
+  width: 340px;
+  max-height: calc(100vh - 32px);
+  overflow-y: auto;
+}
+
+.count {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin: 0 0 4px;
+}
+
+.count strong {
+  font-size: 32px;
+  font-weight: 600;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+.count span { font-size: 13px; color: var(--text-dim); }
+
+.updated {
+  margin: 0 0 14px;
+  font-size: 11px;
+  color: var(--text-dim);
+  font-variant-numeric: tabular-nums;
+}
+
+/* --- Søk ------------------------------------------------------------------ */
+
+.search {
+  display: flex;
+  margin-bottom: 14px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  overflow: hidden;
+  background: rgba(0, 0, 0, 0.25);
+}
+
+.search:focus-within { border-color: var(--accent); }
+
+.search select {
+  border: none;
+  border-right: 1px solid var(--border);
+  background: transparent;
+  color: var(--text-dim);
+  font: inherit;
+  font-size: 11px;
+  padding: 8px 4px 8px 9px;
+  cursor: pointer;
+  appearance: none;
+}
+
+.search select option { background: #161b22; color: var(--text); }
+
+.search input {
+  flex: 1;
+  min-width: 0;
+  border: none;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: 12px;
+  padding: 8px 10px;
+}
+
+.search input::placeholder { color: var(--text-faint, var(--text-dim)); }
+.search input:focus { outline: none; }
+
+.results {
+  list-style: none;
+  margin: -6px 0 14px;
+  padding: 0;
+  max-height: 232px;
+  overflow-y: auto;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+
+.results[hidden] { display: none; }
+
+.results li {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 8px 10px;
+  font-size: 12px;
+  cursor: pointer;
+  border-bottom: 1px solid var(--border);
+}
+
+.results li:last-child { border-bottom: none; }
+.results li:hover, .results li:focus { background: rgba(88, 166, 255, 0.12); }
+
+.results .kind {
+  font-size: 9px;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  flex: none;
+  width: 42px;
+}
+
+.results .hit { color: var(--text); }
+.results .sub { color: var(--text-dim); font-size: 11px; margin-left: auto; }
+.results .empty { color: var(--text-dim); cursor: default; }
+.results .empty:hover { background: none; }
+
+.donut-wrap { display: flex; justify-content: center; margin: 4px 0 14px; }
+
+#donut { width: 132px; height: 132px; }
+
+.donut-seg { transition: stroke-dasharray 0.5s ease; }
+
+.donut-value {
+  font-size: 27px;
+  font-weight: 600;
+  fill: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+
+.donut-label {
+  font-size: 9px;
+  fill: var(--text-dim);
+  letter-spacing: 0.6px;
+  text-transform: uppercase;
+}
+
+.breakdown { display: flex; flex-direction: column; gap: 5px; }
+
+/* Spøkelsestog: tellet for seg, aldri med i punktligheten. */
+.ghosts {
+  margin: 12px 0 0;
+  padding-top: 11px;
+  border-top: 1px solid var(--border);
+  font-size: 11px;
+  color: var(--text-dim);
+  line-height: 1.5;
+}
+
+.ghosts[hidden] { display: none; }
+
+.sr-only {
+  position: absolute;
+  width: 1px; height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--text-dim);
+}
+
+.row .swatch {
+  width: 8px; height: 8px;
+  border-radius: 2px;
+  flex: none;
+  /* Reserven er ikke pynt: en fargeprøve uten klasse ville blitt usynlig, og
+     et bånd uten farge skal se ut som «ukjent», ikke som ingenting. */
+  background: var(--f, var(--c-unknown));
+}
+
+.row .n {
+  margin-left: auto;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+
+/* --- Historikk (operatørrangering og rushtidsprofil) ---------------------- *
+ * Motsatt hjørne av #info. Bredden er valgt slik at «Go-Ahead Nordic» får
+ * plass på én linje ved siden av tallene sine — kortere, og navnet brekker. */
+
+#historikk {
+  top: 16px;
+  right: 16px;
+  width: 300px;
+  max-height: calc(100vh - 32px);
+  overflow-y: auto;
+}
+
+.hist-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 12px;
+}
+
+.hist-head .subtitle { margin-bottom: 0; margin-right: auto; }
+
+/* Sammenslå-knappen. Kartet er innholdet; et panel som dekker en fjerdedel
+   av det må kunne legges bort. */
+.hist-toggle {
+  flex-shrink: 0;
+  width: 16px; height: 16px;
+  border-radius: 3px;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text-dim);
+  font-size: 12px; line-height: 1;
+  cursor: pointer; padding: 0;
+  display: inline-flex; align-items: center; justify-content: center;
+  transition: color 120ms ease, border-color 120ms ease;
+}
+
+.hist-toggle:hover { color: var(--accent); border-color: var(--accent); }
+
+#hist-body[hidden] { display: none; }
+
+.tabs {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 12px;
+  padding: 3px;
+  border-radius: 5px;
+  background: rgba(0, 0, 0, 0.25);
+  border: 1px solid var(--border);
+}
+
+.tab {
+  flex: 1;
+  border: none;
+  border-radius: 3px;
+  background: transparent;
+  color: var(--text-dim);
+  font: inherit;
+  font-size: 11px;
+  letter-spacing: 0.3px;
+  padding: 5px 6px;
+  cursor: pointer;
+  transition: background 120ms ease, color 120ms ease;
+}
+
+.tab:hover { color: var(--text); }
+
+.tab[aria-selected="true"] {
+  background: rgba(88, 166, 255, 0.14);
+  color: var(--text);
+}
+
+.hist-list { display: flex; flex-direction: column; gap: 2px; }
+
+/* Én rad i rangeringen eller rushlista. Grid og ikke flex: plassnummeret,
+   navnet og tallet skal stå i samme kolonne på hver rad, uansett hvor langt
+   navnet er. */
+.hist-rad {
+  display: grid;
+  grid-template-columns: 16px 1fr auto;
+  align-items: baseline;
+  gap: 8px;
+  padding: 6px 0 7px;
+  border-bottom: 1px solid var(--border);
+}
+
+.hist-rad:last-child { border-bottom: none; }
+
+.hist-plass {
+  font-size: 11px;
+  color: var(--text-dim);
+  font-variant-numeric: tabular-nums;
+}
+
+.hist-navn { font-size: 12.5px; color: var(--text); }
+
+/* Stjernen som merker beregnet posisjon. Skal leses som en fotnote, ikke
+   som en advarsel — derfor dempet, ikke rød. */
+.hist-merke {
+  color: var(--text-dim);
+  font-size: 11px;
+  cursor: help;
+}
+
+.hist-tall {
+  font-size: 13px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  /* Uten klasse arves fargen, og det er meningen: i operatørfanen er
+     hovedtallet en andel, og en andel har ingen båndfarge. Se `tallFarge` i
+     histRad(). */
+  color: var(--f, inherit);
+}
+
+/* Detaljlinja under navnet: median, antall turer, andel i rute. Spenner
+   over navne- og tallkolonnen, så den starter i flukt med navnet. */
+.hist-detalj {
+  grid-column: 2 / 4;
+  font-size: 10.5px;
+  color: var(--text-dim);
+  font-variant-numeric: tabular-nums;
+  margin-top: -2px;
+}
+
+/* Andelen i rute som en tynn strek under raden. Et tall alene tvinger deg
+   til å sammenligne sifre; en strek gjør rekkefølgen synlig på avstand. */
+.hist-bar {
+  grid-column: 1 / 4;
+  height: 3px;
+  border-radius: 2px;
+  background: rgba(255, 255, 255, 0.07);
+  overflow: hidden;
+  margin-top: 5px;
+}
+
+.hist-bar span {
+  display: block;
+  height: 100%;
+  border-radius: 2px;
+  background: var(--f, var(--c-unknown));
+  /* Bredden settes av settBarBredder() gjennom CSSOM etter at raden står.
+     Startverdien er null, så overgangen har noe å gå fra. */
+  width: 0;
+  transition: width 0.5s ease;
+}
+
+/* Medianen i detaljlinja. Egen klasse fordi resten av linja skal beholde
+   --text-dim; bare tallet bærer båndfargen. */
+.hist-median { color: var(--f, inherit); }
+
+.hist-gruppe {
+  font-size: 10px;
+  letter-spacing: 0.6px;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  margin: 12px 0 2px;
+}
+
+.hist-gruppe:first-child { margin-top: 0; }
+
+.hist-tom {
+  margin: 4px 0;
+  font-size: 11.5px;
+  color: var(--text-dim);
+  line-height: 1.55;
+}
+
+.hist-fot {
+  margin: 11px 0 0;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+  font-size: 10px;
+  color: var(--text-dim);
+  line-height: 1.5;
+}
+
+.hist-fot:empty { display: none; }
+
+.legend-note p { margin: 0 0 7px; }
+.legend-note p:last-child { margin-bottom: 0; }
+
+/* --- Lagvelger og varmekart ----------------------------------------------- *
+ * Bryteren som slår flaskehalslaget av og på. Ligger nederst i #info, skilt
+ * med en strek fra tellingen over — det er en kontroll, ikke et tall. */
+
+.lagvelger {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 12px;
+  padding-top: 11px;
+  border-top: 1px solid var(--border);
+}
+
+/* Selve bryteren er en ekte <input type="checkbox">, skjult men ikke fjernet:
+   den beholder tastaturnavigasjon, mellomromstasten og skjermleserstøtte
+   gratis. Det synlige er sporet og knotten, tegnet i CSS. */
+.bryter {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  margin-right: auto;
+  font-size: 12.5px;
+  color: var(--text-dim);
+  transition: color 120ms ease;
+}
+
+.bryter input {
+  position: absolute;
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.bryter-spor {
+  position: relative;
+  flex: none;
+  width: 26px;
+  height: 15px;
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.35);
+  border: 1px solid var(--border);
+  transition: background 140ms ease, border-color 140ms ease;
+}
+
+.bryter-spor::after {
+  content: "";
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--text-dim);
+  transition: transform 140ms ease, background 140ms ease;
+}
+
+.bryter input:checked + .bryter-spor {
+  background: rgba(88, 166, 255, 0.25);
+  border-color: var(--accent);
+}
+
+.bryter input:checked + .bryter-spor::after {
+  transform: translateX(11px);
+  background: var(--accent);
+}
+
+.bryter input:checked ~ .bryter-tekst { color: var(--text); }
+
+/* Fokusringen må vises på sporet, siden selve inputen er usynlig. */
+.bryter input:focus-visible + .bryter-spor {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+#flaskehals-panel { margin-top: 11px; }
+#flaskehals-panel[hidden] { display: none; }
+
+/* Divergerende skala: blått der togene tar inn tid, grått ved null, rødt der
+   de taper. Stoppene her må matche FH_SKALA i app.js — de tegner samme
+   gradient, én i CSS og én i MapLibre. */
+.fh-skala {
+  height: 8px;
+  border-radius: 2px;
+  background: linear-gradient(
+    to right,
+    var(--accent) 0%,
+    var(--c-unknown) 33%,
+    var(--c-mid) 55%,
+    var(--c-high) 78%,
+    var(--c-vhigh) 100%
+  );
+}
+
+.fh-merkelapper {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 5px;
+  font-size: 10px;
+  color: var(--text-dim);
+  font-variant-numeric: tabular-nums;
+}
+
+.fh-fot {
+  margin: 9px 0 0;
+  font-size: 10.5px;
+  color: var(--text-dim);
+  line-height: 1.5;
+}
+
+.fh-fot:empty { display: none; }
+
+/* Antall passeringer i popupen. Dempet fordi det er grunnlaget for tallet
+   ved siden av, ikke tallet selv — men det må stå der: «taper to minutter»
+   betyr noe helt annet med fem passeringer enn med femti. */
+.fh-antall {
+  color: var(--text-dim);
+  font-size: 10.5px;
+}
+
+/* --- Nyhetsstripa --------------------------------------------------------- *
+ * Overtok plassen til tegnforklaringen «Forsinkelse» 20. august. Litt bredere
+ * enn den var (268 -> 340 px): en tegnforklaring er fire tall, en melding er
+ * en hel setning, og under 340 px begynte «Toget er innstilt mellom Stabekk og
+ * Skøyen» å bli fire linjer. */
+
+#nyheter { bottom: 16px; left: 16px; width: 340px; }
+
+.nyhet-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.nyhet-head .subtitle { margin-bottom: 0; }
+
+/* Telleren dyttes helt ut mot i-en, så overskriften og «3 / 15» står i hver
+   sin ende av samme linje. */
+.nyhet-teller {
+  margin-left: auto;
+  font-size: 10px;
+  color: var(--text-dim);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.4px;
+}
+
+/* Vinduet er høyden på tre tekstlinjer og klipper. Rullingen skjer ved at
+   meldingen inni flyttes opp og ut, mens den neste kommer inn nedenfra —
+   derfor overflow: hidden her og ikke på .panel, som må slippe tooltipen ut. */
+.nyhet-vindu {
+  position: relative;
+  overflow: hidden;
+  height: 58px;
+}
+
+.nyhet {
+  /* En knapp, ikke en div: meldingen er klikkbar og skal kunne nås med Tab. */
+  display: block;
+  width: 100%;
+  text-align: left;
+  background: transparent;
+  border: none;
+  padding: 0 0 0 12px;
+  margin: 0;
+  font: inherit;
+  color: var(--text);
+  cursor: pointer;
+  /* Fargeprikken til venstre. Som ::before og ikke et eget element, så
+     JS bare setter data-niva og slipper å bygge markup for den. */
+  position: relative;
+}
+
+.nyhet::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 5px;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--nyhet-farge, var(--text-dim));
+  box-shadow: 0 0 8px var(--nyhet-farge, transparent);
+}
+
+/* Nivåene. Fargene er de samme som punktlighetsgradienten bruker, med vilje:
+   rødt betyr det samme i stripa som på en togprikk. «info» har ingen egen
+   farge — den arver den dempede teksten, og det ER poenget. */
+.nyhet[data-niva="stort"]   { --nyhet-farge: var(--c-vhigh); }
+.nyhet[data-niva="middels"] { --nyhet-farge: var(--c-mid); }
+.nyhet[data-niva="rettet"]  { --nyhet-farge: var(--c-low); }
+.nyhet[data-niva="info"]    { --nyhet-farge: var(--text-dim); }
+
+.nyhet-tekst {
+  font-size: 12.5px;
+  line-height: 1.4;
+  color: var(--nyhet-farge, var(--text));
+  /* To linjer, så klippes det. En melding som vokser nedover ville flyttet
+     nedtellingen og pilene for hver rotasjon. Hele teksten ligger i
+     title-attributtet for den som vil lese resten. */
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* Hvitt er lesbart nok som ren tekst; de tre fargene er sterke og trenger å
+   dempes litt for at en hel setning i dem skal være behagelig å lese. */
+.nyhet[data-niva="info"] .nyhet-tekst { color: var(--text); }
+
+.nyhet-stikkord {
+  color: var(--text-dim);
+  font-weight: 600;
+}
+
+.nyhet-meta {
+  display: block;
+  margin-top: 4px;
+  font-size: 10.5px;
+  color: var(--text-dim);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Inn nedenfra, ut oppover. Klassene settes og fjernes av JS. */
+.nyhet.gaar-ut {
+  transform: translateY(-14px);
+  opacity: 0;
+  transition: transform 320ms ease, opacity 320ms ease;
+}
+
+.nyhet.kommer-inn {
+  transform: translateY(14px);
+  opacity: 0;
+}
+
+.nyhet.pa-plass {
+  transform: translateY(0);
+  opacity: 1;
+  transition: transform 320ms ease, opacity 320ms ease;
+}
+
+.nyhet-fot {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 8px;
+}
+
+/* Én melding har ingen «neste», og en nedtelling til ingenting er støy.
+   Trengs fordi display: flex over ellers overstyrer hidden. */
+.nyhet-fot[hidden] { display: none; }
+
+/* Nedtellingen til neste melding. Den finnes for å svare på «hvorfor byttet
+   den akkurat nå?» før spørsmålet stilles — og for å vise at pausen på hover
+   faktisk skjedde. */
+.nyhet-fremdrift {
+  flex: 1;
+  height: 2px;
+  background: var(--border);
+  border-radius: 1px;
+  overflow: hidden;
+}
+
+.nyhet-fremdrift span {
+  display: block;
+  height: 100%;
+  width: 0;
+  background: var(--text-dim);
+  border-radius: 1px;
+}
+
+.nyhet-styring { display: flex; gap: 2px; }
+
+.nyhet-pil {
+  background: transparent;
+  border: none;
+  color: var(--text-dim);
+  font-size: 15px;
+  line-height: 1;
+  padding: 2px 5px;
+  cursor: pointer;
+  border-radius: 3px;
+  transition: color 120ms ease;
+}
+
+.nyhet-pil:hover { color: var(--text); }
+
+/* Tom stripe og feilet henting. Ikke det samme, og skal ikke se likt ut:
+   «ingen avvik» er gode nyheter, «fikk ikke tak i dem» er fravær av nyheter. */
+.nyhet-tom .nyhet-tekst { color: var(--c-low); }
+.nyhet-feil .nyhet-tekst { color: var(--text-dim); font-style: italic; }
+
+.nyhet-tom .nyhet-meta,
+.nyhet-feil .nyhet-meta { display: none; }
+
+.legend-note {
+  margin-top: 8px;
+  font-size: 10.5px;
+  color: var(--text-dim);
+  letter-spacing: 0.2px;
+  line-height: 1.5;
+}
+
+.legend-note[hidden] { display: none; }
+
+/* Den lille kursive i-en fra stromkart. */
+.info-badge {
+  flex-shrink: 0;
+  width: 16px; height: 16px;
+  border-radius: 50%;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text-dim);
+  font-size: 10px; font-weight: 700; line-height: 1;
+  cursor: pointer; padding: 0;
+  display: inline-flex; align-items: center; justify-content: center;
+  font-family: Georgia, "Times New Roman", serif;
+  font-style: italic;
+  transition: color 120ms ease, border-color 120ms ease;
+  vertical-align: middle;
+}
+
+.info-badge:hover,
+.info-badge[aria-expanded="true"] {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
+/* --- Tooltip -------------------------------------------------------------- *
+ * Forklaringen på ett punktlighetsbånd, vist når man holder markøren over en
+ * sektor i ringdiagrammet eller en rad i fordelingen under.
+ *
+ * Egen flate og ikke title-attributtet: nettleserens egen tooltip kommer etter
+ * et sekunds venting, kan ikke styles, og bryter aldri linjene der man vil.
+ * En definisjon på to setninger trenger alle tre delene.
+ *
+ * position: fixed følger av at koordinatene kommer fra clientX/clientY. */
+
+.tip {
+  position: fixed;
+  z-index: 40;
+  max-width: 260px;
+  padding: 9px 11px;
+  background: var(--panel);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+  font-size: 11.5px;
+  line-height: 1.5;
+  color: var(--text-dim);
+  /* Markøren skal aldri kunne treffe tooltipen selv. Gjorde den det, ville
+     mouseleave fyre i det den dukket opp under pekeren, og den ville blinke. */
+  pointer-events: none;
+}
+
+.tip[hidden] { display: none; }
+
+.tip .tip-head {
+  display: flex;
+  align-items: baseline;
+  gap: 7px;
+  margin-bottom: 3px;
+}
+
+.tip .tip-navn { color: var(--text); font-weight: 600; font-size: 12.5px; }
+
+.tip .tip-omrade {
+  margin-left: auto;
+  font-variant-numeric: tabular-nums;
+  font-size: 11px;
+}
+
+.tip .swatch {
+  width: 8px; height: 8px;
+  border-radius: 2px;
+  flex: none;
+  background: var(--f, var(--c-unknown));
+}
+
+/* Sektorene og fordelingsradene er interaktive. Pekeren sier det før man
+   prøver. */
+#donut .donut-seg { cursor: help; }
+.row[data-band] { cursor: help; }
+.row[data-band]:hover, .row[data-band]:focus-visible { color: var(--text); }
+
+/* --- Varsel --------------------------------------------------------------- */
+
+.status-err {
+  position: absolute;
+  top: 16px; left: 50%;
+  transform: translateX(-50%);
+  z-index: 20;
+  padding: 9px 15px;
+  font-size: 12px;
+  color: var(--c-mid);
+  background: var(--panel);
+  backdrop-filter: blur(8px);
+  border: 1px solid var(--c-mid);
+  border-radius: 6px;
+}
+
+.status-err[hidden] { display: none; }
+
+/* --- Popup ---------------------------------------------------------------- */
+
+.maplibregl-popup-content {
+  background: var(--panel);
+  backdrop-filter: blur(8px);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text);
+  font-family: inherit;
+  padding: 12px 14px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+}
+
+.maplibregl-popup-tip {
+  border-top-color: var(--panel) !important;
+  border-bottom-color: var(--panel) !important;
+}
+
+.maplibregl-popup-close-button { color: var(--text-dim); font-size: 16px; padding: 2px 7px; }
+
+.pop-line {
+  font-size: 16px;
+  font-weight: 600;
+  margin-bottom: 2px;
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  /* Togpopupen farger linjekoden etter båndet. Flaskehalspopupen bruker samme
+     klasse til stasjonsnavnene og gir den ingen farge — derfor `inherit`. */
+  color: var(--f, inherit);
+}
+
+/* Tognummeret er togledelsens identifikator, ikke passasjerens. Det står
+   ved siden av linjekoden, men nedtonet - RE30 er det folk kjenner igjen. */
+.pop-train {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text-dim);
+  letter-spacing: 0.4px;
+  font-variant-numeric: tabular-nums;
+}
+.pop-route { font-size: 12px; color: var(--text-dim); margin-bottom: 8px; }
+/* Motsatt av .pop-line: her er det flaskehalspopupen som farger, og
+   togpopupen som lar den stå. */
+.pop-delay {
+  font-size: 13px;
+  margin-bottom: 8px;
+  font-variant-numeric: tabular-nums;
+  color: var(--f, inherit);
+}
+.pop-meta {
+  font-size: 11px;
+  color: var(--text-dim);
+  line-height: 1.6;
+  font-variant-numeric: tabular-nums;
+}
+
+/* --- Tilgjengelighet ------------------------------------------------------ */
+
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* --- Mobil ---------------------------------------------------------------- *
+ * Bunnsheet, samme mekanikk som stromkart. Tre stopp — nede, halvveis, oppe —
+ * og et gripefelt du drar i. Nede står bare gripefeltet igjen, med de to
+ * tallene som er verdt et blikk, og kartet får hele flaten.
+ *
+ * Geometrien måles av app.js og settes som transform. CSS eier utseendet og
+ * høyden; JS eier hvor sheetet står. Ingen av dem regner ut den andres tall. */
+
+/* Gripefeltet finnes bare på telefon. På skrivebord ligger panelene fritt i
+   hjørnene sine, og det er ingenting å dra i. */
+.sheet-gripe { display: none; }
+
+@media (max-width: 768px) {
+  /* Alt som ligger i sheetet er flatt: ingen ramme, ingen skygge, ingen egen
+     bakgrunn — sheetet er flaten, panelene er seksjoner i den. Regelen treffer
+     .panel og ikke en liste med id-er, slik at et panel som flyttes inn i
+     sheetet ikke må skrives inn her i tillegg for å se riktig ut. Den listen
+     var feilkilden sist: nyhetsstripa arvet plassen til en tegnforklaring som
+     var tatt ut, og regelen sa fortsatt det gamle navnet. */
+  #sheet .panel {
+    position: static;
+    width: auto;
+    border: none;
+    border-radius: 0;
+    box-shadow: none;
+    background: transparent;
+    backdrop-filter: none;
+    padding: 0;
+  }
+
+  /* På telefon er sheetet allerede høyt. Historikken starter sammenslått, og
+     max-height fra desktop ville ellers gitt panelet sin egen scroll inni en
+     flate som selv ruller. Det samme gjelder #info, som fikk samme tak da den
+     fikk fast bredde. */
+  #historikk, #info { max-height: none; overflow: visible; }
+
+  #sheet {
+    /* fixed og ikke absolute. Sheetet står nedenfor skjermkanten i de fleste
+       tilstandene sine, og en absolutt plassert boks som gjør det, gir hele
+       dokumentet en rullehøyde det ikke skal ha — nok til at et fokusbytte
+       kan skyve kartet ut av bildet. En fixed boks teller ikke med i
+       dokumentets rulleområde i det hele tatt. */
+    position: fixed;
+    bottom: 0; left: 0; right: 0;
+    /* Høyden følger innholdet og stopper på 88 % av skjermen. Et sheet med
+       fast høyde ville stått med en tom flate over kartet hver gang panelene
+       er sammenslått — og det er nettopp da man vil se kartet. Taket gjør at
+       resten ruller inni sheetet når historikken slås ut.
+       dvh og ikke vh: adresselinja på telefon gjemmer seg, og vh gjør ikke. */
+    height: auto;
+    max-height: 88vh;   /* reserve for nettlesere uten dvh */
+    max-height: 88dvh;
+    z-index: 100;
+    display: flex;
+    flex-direction: column;
+    background: var(--panel);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border-top: 1px solid var(--border);
+    border-radius: 20px 20px 0 0;
+    box-shadow: 0 -8px 32px rgba(0, 0, 0, 0.6);
+    transition: transform 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
+    /* app.js overtar før første maling. Verdien her er reserven hvis skriptet
+       aldri kjører: da står sheetet oppe med alt innholdet framme, som er en
+       bedre havari-tilstand enn et sheet ingen får dratt opp. */
+    transform: translateY(0);
+  }
+
+  /* Under fingeren skal sheetet følge med uten etterslep. Overgangen slås av
+     så lenge dragningen varer, ikke bare dempes. */
+  #sheet.drar { transition: none; }
+
+  .sheet-gripe {
+    display: grid;
+    justify-items: center;
+    gap: 7px;
+    flex: none;
+    width: 100%;
+    /* Bunninnrykket hører hjemme her og ikke på innholdet under: når sheetet
+       ligger nede, er gripefeltet det eneste som er innenfor skjermen, og det
+       er det som havner oppå hjemindikatoren på iPhone. Prisen er litt ekstra
+       luft over innholdet når sheetet er dratt opp. */
+    padding: 11px 18px calc(13px + env(safe-area-inset-bottom));
+    background: none;
+    border: none;
+    color: inherit;
+    font: inherit;
+    cursor: grab;
+    /* Nettleseren skal ikke tolke dragningen som rulling, zoom eller et forsøk
+       på å markere teksten i sammendraget. */
+    touch-action: none;
+    user-select: none;
+    -webkit-user-select: none;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  .sheet-gripe:active { cursor: grabbing; }
+
+  /* Håndtaket skal leses som noe man kan ta i. --border er for svakt til det
+     — det er strekfargen mellom to flater, ikke en kontroll. */
+  .sheet-handtak {
+    width: 40px; height: 5px;
+    border-radius: 3px;
+    background: var(--text-dim);
+    opacity: 0.55;
+  }
+
+  /* Sammendraget er det eneste som er lesbart når sheetet ligger nede, så det
+     skal aldri brekke til to linjer og skyve håndtaket ut av bildet. */
+  .sheet-sammendrag {
+    max-width: 100%;
+    font-size: 12px;
+    color: var(--text-dim);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  #sheet-innhold {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+    touch-action: pan-y;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    /* Hjemindikatoren igjen, denne gangen for tilstanden der sheetet er dratt
+       opp og det er innholdet som ligger nederst på skjermen. */
+    padding: 0 18px calc(18px + env(safe-area-inset-bottom));
+  }
+
+  /* Attribusjonen skal ligge over sheetkanten, ikke bak den. app.js setter
+     --sheet-synlig til hvor mye av sheetet som står opp av skjermen, begrenset
+     oppover ved halvveis-stoppet — ellers ville kontrollen blitt skjøvet ut av
+     bildet i det øyeblikket sheetet dekker kartet likevel. */
+  .maplibregl-ctrl-bottom-right {
+    bottom: calc(var(--sheet-synlig, 56px) + 8px) !important;
+    transition: bottom 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
+  }
+
+  .count strong { font-size: 26px; }
+  .breakdown { display: grid; grid-template-columns: 1fr 1fr; gap: 5px 16px; }
+}
+
+@media (min-width: 769px) {
+  /* Sheetet og innholdsboksen er rene mobilbeholdere. På skrivebord faller
+     begge ut av layouten, og panelene legger seg i hjørnene sine som før —
+     de er fortsatt absolutt plassert mot vinduet, ikke mot en forelder. */
+  #sheet, #sheet-innhold { display: contents; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * { animation: none !important; transition: none !important; }
+}

@@ -1,0 +1,39 @@
+/* ==========================================================================
+   TEMA — hentet direkte fra stromkart.
+
+   Variabelnavnene er identiske med stromkart sin :root, slik at du kan lime
+   inn oppdateringer derfra uten å oversette noe. De fire gradient-variablene
+   har byttet betydning: fra øre/kWh til forsinkelse i sekunder. Skalaen er
+   den samme, størrelsen den måler er ny.
+
+   Kartprikkene leser de samme variablene — app.js henter dem med
+   getComputedStyle og gir dem videre til MapLibre.
+   ========================================================================== */
+
+:root {
+  --bg:        #0d1117;
+  --panel:     rgba(22, 27, 34, 0.92);
+  --border:    #30363d;
+  --text:      #e6edf3;
+  --text-dim:  #8b949e;
+  --accent:    #58a6ff;
+
+  /* Punktlighetsgradient (i rute → mye forsinket).
+     Samme fire trinn som prisgradienten på stromkart. */
+  --c-low:    #10b981;
+  --c-mid:    #eab308;
+  --c-high:   #f97316;
+  --c-vhigh:  #dc2626;
+
+  /* Nytt trinn: stromkart trenger det ikke, fordi et prisområde alltid har
+     en pris. Et tog kan mangle forsinkelsesdata, og da må det være synlig
+     forskjellig fra "i rute" — ikke bare falle til grønt. */
+  --c-unknown: #6e7681;
+
+  /* Jernbanenettet. Cyan er valgt fordi den ligger langt unna hele
+     punktlighetsgradienten i fargesirkelen — grønt, gult, oransje og rødt
+     kan aldri forveksles med den. Og fordi den er den eneste mettede fargen
+     på kartet, skiller sporene seg fra grå bilveier og kommunegrenser selv
+     når de er tynne. */
+  --rail: #22d3ee;
+}

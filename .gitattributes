@@ -1,0 +1,27 @@
+# Normaliser linjeskift: LF i repoet, systemets egne i arbeidskopien.
+# Uten denne gir hver fil som er redigert på Windows en CRLF-advarsel, og
+# CI-en (som kjører på Ubuntu) ser en annen fil enn den du redigerte.
+* text=auto eol=lf
+
+# Windows-verktøy vil ha CRLF.
+*.ps1  text eol=crlf
+
+# Binærfiler skal ikke røres.
+*.png  binary
+
+# Tredjepartskode, hentet uendret fra utgiveren. Skal ikke telles som vår kode
+# i språkstatistikken, og en diff av 800 kB minifisert JavaScript er ingenting
+# å lese. static/vendor/README.md er vår egen tekst og holdes utenfor.
+#
+# `-text` er det som betyr noe: regelen `* text=auto eol=lf` øverst ville
+# normalisert linjeskiftene, og da stemmer ikke lenger sjekksummene i
+# static/vendor/README.md med det utgiveren faktisk publiserte. 4.7.1 er ren
+# LF og hadde overlevd det, men neste versjon trenger ikke være det - og en
+# hash som er stille feil er verre enn ingen hash.
+static/vendor/*.js   linguist-vendored=true -diff -text
+static/vendor/*.css  linguist-vendored=true -diff -text
+
+# GeoJSON-filene er bygget, ikke skrevet. De er store og diffene er
+# meningsløse - marker dem som generert så de kollapses i GitHubs
+# diff-visning og holdes utenfor språkstatistikken.
+static/*.geojson  linguist-generated=true -diff

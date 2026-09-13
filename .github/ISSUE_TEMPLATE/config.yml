@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Feilsøking
+    url: https://github.com/OWNER/togkart/blob/main/docs/feilsoking.md
+    about: Hvilket skript svarer på hva, og hva helsesjekkene skal si
+  - name: Erfaringer
+    url: https://github.com/OWNER/togkart/blob/main/docs/erfaringer.md
+    about: Feilene dette prosjektet allerede har gjort — les før du melder en ny

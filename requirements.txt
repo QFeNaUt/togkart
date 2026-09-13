@@ -1,0 +1,46 @@
+# Kjøres appen trenger.
+#
+# Versjonene er LÅST med `==`, ikke `>=`. Så lenge dette bare ble installert i
+# en .venv du selv så på, var `>=` greit. Et image som bygges på nytt om tre
+# måneder og da drar inn en ny FastAPI er noe annet: da er det ikke lenger
+# koden i git som avgjør hva som kjører, og en feil kan ikke rulles tilbake
+# ved å bygge forrige revisjon.
+#
+# Tallene er de som faktisk sto i .venv-en 13. september 2026 og som appen er
+# kjørt med. Oppdater bevisst - én pakke om gangen, med `python sjekk.py alle`
+# og `python prober/smoketest.py` etterpå:
+#
+#     pip install -U fastapi && pip freeze | Select-String fastapi
+#
+# Transitive avhengigheter (starlette, pydantic, anyio, h11, uvloop ...) er
+# ikke låst her. Vil du ha det helt låst, lag en lockfil PÅ LINUX - fra
+# Windows blir den feil, for uvloop og httptools finnes ikke her:
+#
+#     docker compose run --rm --entrypoint pip togkart freeze > requirements.lock
+
+fastapi==0.141.1
+uvicorn[standard]==0.52.3
+python-dotenv==1.2.3
+
+# HTTP, og det ENESTE HTTP-biblioteket her. httpx er valgt fordi den er den
+# eneste som fungerer inne i FastAPI uten å blokkere hendelsesløkka - og fordi
+# den synkrone API-en er nesten ordrett den samme, så verktøyene utenfor
+# serveren (`sjekk.py`, probene) kan bruke den også.
+#
+# `requests` sto her til 23. august, for sjekk.py og tre prober. To biblioteker
+# for samme jobb er to sett standardverdier å holde styr på, og de er ikke like:
+# requests følger omdirigeringer av seg selv, httpx gjør det ikke. Ingen av
+# Entur-endepunktene omdirigerer - målt før byttet, alle tre svarte 200 uten
+# omdirigering - så byttet var rent. Er du den som legger til et kall mot noe
+# annet, er `follow_redirects=True` det du kan komme til å mangle.
+httpx==0.28.1
+
+# Tidssonedatabasen. `analyse.py` spør om morgen- og ettermiddagsrush, og det
+# er lokale klokkeslett - databasen lagrer UTC. Linux og macOS har tabellene i
+# operativsystemet, Windows har dem ikke, og da feiler `zoneinfo` med
+# "No time zone found with key Europe/Oslo". Denne pakken er tabellene.
+#
+# Den dekker `zoneinfo`, men ikke `time.localtime()`, som er den logging
+# bruker. Derfor installerer Dockerfile i tillegg systemets tzdata - se
+# kommentaren der.
+tzdata==2026.3

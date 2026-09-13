@@ -1,0 +1,71 @@
+# Kjører bare de selvtestene som ikke rører nettet eller historikk.db.
+#
+# Alt som henter fra Entur krever ET_CLIENT_NAME og gjør bygget avhengig av at
+# en tredjepart svarer — det hører hjemme i `python sjekk.py alle` lokalt, ikke
+# her. Alt som leser historikk.db er utelatt fordi databasen ikke ligger i git.
+
+name: Selvtester
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  selvtest:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+
+      - name: Installer avhengigheter
+        run: pip install -r requirements.txt
+
+      - name: Interpolasjon og geometri
+        run: |
+          python prober/test_geometri.py
+          python sporgeometri.py
+
+      - name: Dobbeltsett og tognummer
+        run: python prober/test_dobbeltsett.py
+
+      - name: Ferdige tog og endestasjon
+        run: python prober/test_ferdige.py
+
+      - name: Ringdiagrammets telling
+        run: python prober/test_telling.py
+
+      # To ganger, og den andre er den som betyr noe. Unntaket for
+      # Swagger-sidene finnes bare i utvikling, og påstanden «ute sendes
+      # CSP-en på hvert eneste svar» er ikke verifisert før prod-miljøet
+      # er satt.
+      - name: Sikkerhetsheadere og CSP
+        run: |
+          python prober/sjekk_headere.py
+          TOGKART_MILJO=prod python prober/sjekk_headere.py
+
+      - name: Helsesjekken
+        run: python prober/sjekk_helse.py
+
+      - name: Entur-svar som ikke er svar
+        run: python prober/felles.py --selvtest
+
+      - name: Materielloppslag
+        run: python materiell.py
+
+      - name: Byggeskriptenes tolkning
+        run: |
+          python lagbaner.py --selvtest
+          python lagjernbanenett.py --selvtest
+          python lagstasjoner.py --selvtest
+
+      - name: Vedlikehold og ratebegrensning
+        run: |
+          python vedlikehold.py --selvtest
+          python strupe.py --selvtest
+          python prober/sjekk_strupe.py --uten-server

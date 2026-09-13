@@ -1,0 +1,289 @@
+<!DOCTYPE html>
+<html lang="nb">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+    <title>TogKart</title>
+    <meta name="description" content="Sanntid punktlighet for tog i Norge." />
+
+    <!-- MapLibre serveres av oss, ikke av unpkg. Se static/vendor/README.md
+         for versjon, sjekksummer og hvordan filene byttes ut. -->
+    <link href="vendor/maplibre-gl.css" rel="stylesheet" />
+    <!-- Rekkefølgen betyr noe: theme.css definerer variablene app.css bruker. -->
+    <link href="theme.css" rel="stylesheet" />
+    <link href="app.css" rel="stylesheet" />
+  </head>
+
+  <body>
+    <div id="map" role="application" aria-label="Kart over aktive tog i Norge"></div>
+
+    <div id="error" class="status-err" role="status" hidden></div>
+
+    <!-- Tooltip for ringdiagrammet og fordelingslista. Ligger på body og ikke
+         inne i panelet, fordi den skal kunne stikke utenfor panelkanten uten
+         å bli klippet av overflow. -->
+    <div id="tip" class="tip" role="tooltip" hidden></div>
+
+    <div id="sheet">
+      <!-- Gripefeltet. Usynlig på skrivebord, der panelene ligger fritt i
+           hjørnene sine; på telefon er det både håndtaket man drar i og
+           sammendraget man leser når sheetet ligger nede. Sammendraget
+           skrives av renderMeta, av de samme tallene som ringen — ikke av en
+           egen utregning. -->
+      <button class="sheet-gripe" type="button" id="sheet-gripe"
+              aria-controls="sheet-innhold" aria-expanded="true"
+              aria-label="Skjul tallene og vis kartet">
+        <span class="sheet-handtak" aria-hidden="true"></span>
+        <span class="sheet-sammendrag" id="sheet-sammendrag" aria-hidden="true">kobler til …</span>
+      </button>
+
+      <div id="sheet-innhold">
+        <div id="info" class="panel">
+          <div class="search">
+            <select id="scope" aria-label="Søk i">
+              <option value="all">Alle</option>
+              <option value="stations">Stasjoner</option>
+              <option value="trains">Tog</option>
+            </select>
+            <input id="q" type="search" autocomplete="off" spellcheck="false"
+                   placeholder="Finn stasjon eller tog" aria-label="Søk" />
+          </div>
+          <ul id="results" class="results" hidden></ul>
+
+          <div class="subtitle">TogKart Norge · sanntid</div>
+          <p class="count">
+            <strong id="count">–</strong>
+            <span>tog i trafikk</span>
+          </p>
+          <p class="updated">
+            <span class="pulse" aria-hidden="true"></span>
+            <span id="updated">kobler til …</span>
+          </p>
+          <div class="donut-wrap">
+            <svg id="donut" viewBox="0 0 120 120" role="img"
+                 aria-labelledby="donut-title"></svg>
+            <span id="donut-title" class="sr-only">Andel tog i rute</span>
+          </div>
+          <div class="breakdown" id="breakdown"></div>
+          <p class="ghosts" id="ghosts" hidden></p>
+
+          <!-- Kartlag som kan slås av og på. Ligger i #info og ikke i et eget
+               panel fordi det er en kontroll og ikke en visning — og fordi
+               mobilsheetet da får den med seg uten egen behandling. -->
+          <div class="lagvelger">
+            <label class="bryter" for="flaskehals-paa">
+              <input type="checkbox" id="flaskehals-paa" />
+              <span class="bryter-spor" aria-hidden="true"></span>
+              <span class="bryter-tekst">Flaskehalser</span>
+            </label>
+            <button
+              class="info-badge"
+              type="button"
+              id="flaskehals-help"
+              aria-expanded="false"
+              aria-controls="flaskehals-note"
+              aria-label="Hva varmekartet måler"
+            >i</button>
+          </div>
+
+          <div id="flaskehals-panel" hidden>
+            <div class="fh-skala" aria-hidden="true"></div>
+            <div class="fh-merkelapper">
+              <span>tar inn</span><span>0</span><span>+90 s</span>
+            </div>
+            <p class="fh-fot" id="flaskehals-fot"></p>
+
+            <div class="legend-note" id="flaskehals-note" hidden>
+              <p>
+                Hver strek er en strekning mellom to nabostasjoner, farget etter
+                hvor mye tid togene <strong>taper på å kjøre den</strong> —
+                avviket ved ankomst minus avviket ved avgang, median over alle
+                passeringer.
+              </p>
+              <p>
+                Det er noe annet enn «hvor er togene mest forsinket». Et tog som
+                ruller inn til Oslo S tjue minutter for sent ville gjort Oslo S
+                rødt på et gjennomsnittskart — men forsinkelsen oppsto kanskje
+                på Kongsvingerbanen to timer tidligere. Kartet skal peke på
+                flaskehalsen, ikke på stedet der den blir synlig.
+              </p>
+              <p>
+                <strong>Blått</strong> er strekninger der togene tar inn tid
+                igjen. Det er ikke nødvendigvis gode nyheter: det betyr som
+                regel at rutetabellen har slakk innebygd der.
+              </p>
+              <p>
+                Strekningene er ikke skrevet ned noe sted — de er utledet av
+                hvor togene faktisk har kjørt, og streken følger sporet fordi
+                den er medianen av målte posisjoner. Strekninger med færre enn
+                fem passeringer vises ikke; én forsinket avgang er en anekdote.
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <!-- Historikkpanelet. Sammenslått i én flate fordi de to fanene svarer
+             på samme spørsmål fra hver sin kant: hvem kjører presist, og når og
+             hvor slår det feil. Ligger øverst til høyre, motsatt hjørne av
+             #info, så kartets midte er fri. -->
+        <div id="historikk" class="panel">
+          <div class="hist-head">
+            <div class="subtitle">Historikk</div>
+            <button
+              class="info-badge"
+              type="button"
+              id="hist-help"
+              aria-expanded="false"
+              aria-controls="hist-note"
+              aria-label="Slik er tallene regnet ut"
+            >i</button>
+            <button
+              class="hist-toggle"
+              type="button"
+              id="hist-toggle"
+              aria-expanded="true"
+              aria-controls="hist-body"
+              aria-label="Skjul historikkpanelet"
+            >–</button>
+          </div>
+
+          <div id="hist-body">
+            <div class="tabs" role="tablist" aria-label="Historikkvisning">
+              <button class="tab" role="tab" id="tab-operatorer"
+                      aria-controls="fane-operatorer" aria-selected="true">
+                Operatører
+              </button>
+              <button class="tab" role="tab" id="tab-rush"
+                      aria-controls="fane-rush" aria-selected="false">
+                Rushtid
+              </button>
+            </div>
+
+            <div id="fane-operatorer" role="tabpanel" aria-labelledby="tab-operatorer">
+              <div class="hist-list" id="rangering">
+                <p class="hist-tom">laster …</p>
+              </div>
+            </div>
+
+            <div id="fane-rush" role="tabpanel" aria-labelledby="tab-rush" hidden>
+              <div class="hist-list" id="rushprofil">
+                <p class="hist-tom">laster …</p>
+              </div>
+            </div>
+
+            <p class="hist-fot" id="hist-fot"></p>
+
+            <div class="legend-note" id="hist-note" hidden>
+              <p>
+                Regnet ut av <strong>historikk.db</strong>, som logger hvert tog
+                på kartet når det flytter seg eller avviket endrer seg.
+              </p>
+              <p>
+                Alle observasjoner av samme tog samme dag slås sammen til
+                <strong>én togtur</strong> med medianen av avvikene underveis.
+                Ellers ville et langt tog telt tyngre enn et kort, bare fordi
+                det logges oftere.
+              </p>
+              <p>
+                <strong>I rute</strong> betyr typisk avvik under 4 minutter
+                underveis — samme grense som fargene på kartet. Bransjen bruker
+                to grenser (3:59 for lokaltog, 5:59 for fjerntog); én felles
+                grense er brukt her, ellers ville selskaper med mest fjerntog
+                blitt målt mildere enn de andre i samme rangering.
+              </p>
+              <p>
+                Streken under hver rad måler to ting: <strong>lengden</strong> er
+                hvor ofte toget er i rute, <strong>fargen</strong> hvor mye det
+                bommer når det bommer — samme fargeskala som prikkene på kartet.
+              </p>
+              <p>
+                Dette er ikke offisiell punktlighet: den måles ved ankomst
+                endestasjon, ikke underveis.
+              </p>
+              <p>
+                Rushtid måler <strong>avvik og trafikkmengde</strong>, ikke
+                passasjerbelegg — Entur publiserer ingen passasjertall. Bare
+                hverdager telles.
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <!-- Nyhetsstripa. Står der tegnforklaringen «Forsinkelse» sto til 20.
+             august; den er lagt på is i STATUS.md med markupen sin, i tilfelle
+             den skal fram igjen.
+
+             Én melding om gangen, ikke en vannrett marquee: boksen er 340 px, og
+             en tekst som sklir sidelengs gjennom et så smalt vindu kan hverken
+             leses ferdig eller klikkes på. Rullingen går derfor oppover, ett
+             helt utsagn av gangen. -->
+        <div id="nyheter" class="panel">
+          <div class="nyhet-head">
+            <div class="subtitle">Driftsmeldinger</div>
+            <span class="nyhet-teller" id="nyhet-teller" aria-hidden="true"></span>
+            <button
+              class="info-badge"
+              type="button"
+              id="nyhet-help"
+              aria-expanded="false"
+              aria-controls="nyhet-note"
+              aria-label="Hvor meldingene kommer fra"
+            >i</button>
+          </div>
+
+          <!-- aria-live er «off» med vilje. Stripa bytter melding hvert sjette
+               sekund, og en skjermleser som leser opp hver rotasjon ville gjort
+               resten av siden ubrukelig. Knappene under gir samme innhold på
+               brukerens eget tempo. -->
+          <div class="nyhet-vindu" id="nyhet-vindu" aria-live="off">
+            <button class="nyhet" type="button" id="nyhet">
+              <span class="nyhet-tekst">laster …</span>
+            </button>
+          </div>
+
+          <div class="nyhet-fot">
+            <div class="nyhet-fremdrift" id="nyhet-fremdrift" aria-hidden="true">
+              <span></span>
+            </div>
+            <div class="nyhet-styring">
+              <button class="nyhet-pil" type="button" id="nyhet-forrige"
+                      aria-label="Forrige melding">‹</button>
+              <button class="nyhet-pil" type="button" id="nyhet-neste"
+                      aria-label="Neste melding">›</button>
+            </div>
+          </div>
+
+          <div class="legend-note" id="nyhet-note" hidden>
+            <p>
+              Avviksmeldinger fra <strong>SIRI-SX</strong> via Entur — det samme
+              varselet som går til app og skjerm på stasjonen. Vy og Go-Ahead
+              publiserer; Flytoget og SJ Nord gjør det ikke ennå.
+            </p>
+            <p>
+              <strong>Rødt</strong> er innstillinger og stengte strekninger,
+              <strong>gult</strong> er avvik underveis, <strong>grønt</strong> at
+              feilen er rettet, og <strong>hvitt</strong> planlagt arbeid og
+              praktisk informasjon.
+            </p>
+            <p>
+              Fargen er utledet av alvorsgraden i meldingen <em>og</em> av
+              teksten. Den må være det: nesten alle meldinger kommer merket
+              «normal», så en heis ute av drift og en innstilt avgang har samme
+              alvorsgrad i dataene.
+            </p>
+            <p>
+              <strong>Hold markøren over en melding</strong> for å se hva den
+              gjelder i kartet, og <strong>klikk</strong> for å bli der.
+              Gjelder den én stasjon, får den en ring; gjelder den en strekning,
+              lyser hele banestykket. Stripa står stille så lenge markøren er
+              over den.
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <script src="vendor/maplibre-gl.js"></script>
+    <script src="app.js"></script>
+  </body>
+</html>

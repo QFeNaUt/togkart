@@ -1,0 +1,35 @@
+# Virtuelt miljø — skal aldri i git. Andre gjenoppretter det fra
+# requirements.txt med "pip install -r requirements.txt".
+.venv/
+venv/
+
+# Hemmeligheter og lokal konfigurasjon.
+# .env.example ligger i git som mal. .env gjør det ikke.
+# drift/env.produksjon ligger også i git, med vilje — ingenting i den er
+# hemmelig, og den er en mal som ikke er aktiv der den ligger.
+.env
+
+# .env.tunnel er det ene som FAKTISK er hemmelig: tunneltokenet. Den som har
+# det, kan kjøre tunnelen din. Derfor ligger det ikke i .env — se compose.yaml.
+.env.tunnel
+
+# Python-mellomlager
+__pycache__/
+*.py[cod]
+
+# Historikkdatabasen. I WAL-modus er den TRE filer, ikke én — -wal og -shm
+# fanges ikke av *.db, og en innsjekket -wal er verre enn ingenting.
+*.db
+*.db-wal
+*.db-shm
+*.sqlite3
+
+# Verktøyets lokale innstillinger. .claude/settings.json (uten "local")
+# er delt og skal i git hvis den lages.
+.claude/settings.local.json
+
+# Editor og OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
