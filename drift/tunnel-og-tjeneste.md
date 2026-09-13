@@ -78,7 +78,25 @@ utrulling: `osl02` og `arn07`, over QUIC.
 
 ## 2. Appen som systemd-tjeneste
 
-`/etc/systemd/system/togkart.service`:
+**Fila ligger i git som `drift/togkart.service`.** Kopier den, ikke skriv den
+av:
+
+```bash
+cp /opt/togkart/drift/togkart.service /etc/systemd/system/
+systemctl daemon-reload
+systemctl enable --now togkart
+systemd-analyze verify /etc/systemd/system/togkart.service   # skal være stille
+```
+
+Grunnen til at den ligger i git og ikke bare som en blokk her: innliming av
+den i en nettleserkonsoll mislyktes to ganger under utrullingen 13.
+september, begge ganger ved at `[Unit]` på første linje forsvant. Resultatet
+var en tjeneste som kjørte, men uten `After=network-online.target` — den
+ville startet før nettverket ved en omstart av containeren, og ingenting
+hadde sagt fra. `systemd-analyze verify` er det som fanger det; den skriver
+ingenting når alt er i orden.
+
+Innholdet, for lesing:
 
 ```ini
 [Unit]

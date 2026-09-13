@@ -1,0 +1,37 @@
+[Unit]
+Description=TogKart
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=exec
+User=togkart
+WorkingDirectory=/opt/togkart
+EnvironmentFile=/opt/togkart/.env
+
+# systemd leser ikke /etc/default/locale for tjenester, og appen logger norsk
+# til journald.
+Environment=LANG=C.UTF-8
+
+# --host 127.0.0.1: bare cloudflared skal nå den, uansett hva som skjer med
+#   brannmuren. Merk at dette er motsatt av Docker-varianten, der
+#   containergrensen er isolasjonen og bindingen må være 0.0.0.0.
+# --no-server-header: fjerner "server: uvicorn" fra svaret.
+#   docs/sikkerhet.md punkt 7 - gratis fingeravtrykk.
+# Ingen --reload i produksjon: den dobler minnebruken og starter på nytt hvis
+#   en loggfil så vidt blir rørt.
+ExecStart=/opt/togkart/.venv/bin/uvicorn app:app \
+    --host 127.0.0.1 --port 8000 --no-server-header
+
+Restart=always
+RestartSec=5
+
+# Appen skriver til én fil og leser resten. Da kan resten være skrivebeskyttet.
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+NoNewPrivileges=true
+ReadWritePaths=/var/lib/togkart
+
+[Install]
+WantedBy=multi-user.target

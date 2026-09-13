@@ -9,6 +9,7 @@ Alt som handler om at kartet står i morgen, ikke om hva det viser.
 | [docker.md](docker.md) | Samme oppsett i container: `Dockerfile`, `compose.yaml`, cloudflared i samme nettverksnavnerom |
 | `env.produksjon` | Mal for `.env` på serveren |
 | `oppdater.sh` | Utrulling: hent, installer om nødvendig, start om, verifiser |
+| `togkart.service` | systemd-unit'en. Kopieres til `/etc/systemd/system/`, skrives ikke av |
 
 Sikkerhetsgjennomgangen står i [../docs/sikkerhet.md](../docs/sikkerhet.md).
 
