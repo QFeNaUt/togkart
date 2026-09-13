@@ -142,6 +142,15 @@ for felt in ("aktiv", "bakCloudflare", "enturKvote"):
 si("igjen" in (strupe.get("enturKvote") or {}), "strupe.enturKvote.igjen",
    "tallet som sier om kvoten brukes opp")
 
+# Bakgrunnsjobben, av samme grunn som strupen: en jobb som har stoppet ser
+# nøyaktig ut som en som virker, helt til noen leter etter hull i historikken
+# en uke senere. `sisteOkSekunderSiden` vesentlig over `intervallSekunder`
+# betyr at den står.
+poller = kropp.get("poller") or {}
+for felt in ("aktiv", "intervallSekunder", "runder", "feil",
+             "sisteOkSekunderSiden"):
+    si(felt in poller, f"poller.{felt}", "" if felt in poller else "borte")
+
 
 print("\n6. Invarianten som holder sjekk 1 i live\n")
 

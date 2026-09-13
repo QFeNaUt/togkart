@@ -69,3 +69,8 @@ jobs:
           python vedlikehold.py --selvtest
           python strupe.py --selvtest
           python prober/sjekk_strupe.py --uten-server
+
+      # Bare minnelogikken - hva som logges, og hva som glemmes. Den rører
+      # ikke databasen, så den kan kjøre her uten en historikk.db.
+      - name: Historikkens minne
+        run: python historikk.py --selvtest

@@ -339,6 +339,30 @@ toget. Uten sperren ville hver av de beregnede SJ-posisjonene fått en ny rad
 ved hver eneste forespørsel, siden de regnes ut på nytt fra klokka — nettopp
 de 700 000 radene i døgnet spesifikasjonen advarte mot.
 
+**Hvem som utløser skrivingen, endret seg 14. september.** Til da var svaret
+«den som ser på kartet»: `get_snapshot()` kalles fra `/api/trains`, og sto
+nettleseren lukket, ble ingenting logget. Målt på sju døgn ga det en database
+som var et bilde av utviklerens surfevaner — klokka ni om morgenen hadde null
+observasjoner, mens kveldstimene hadde tolv ganger så mange som morgenrushet.
+Og `rushtidsprofil()` i `analyse.py` leser nettopp de rå radene.
+
+Nå kaller en bakgrunnsjobb i `livslop()` `get_snapshot()` hvert 60. sekund,
+uansett om noen ser på. **Jobben kaller ikke noe annet**, og det er poenget:
+det er fortsatt én vei inn til cachen og til historikken, bak samme lås. To
+kallere som deler én skriver, ikke to skrivere.
+
+Intervallet er ikke `CACHE_TTL`, og forskjellen er ikke akademisk. Et tog i
+100 km/t flytter seg 50 m på under to sekunder, så ved ethvert intervall over
+ti sekunder logges praktisk talt hvert tog ved hver runde — og da er det
+intervallet, ikke trafikken, som bestemmer databasens størrelse: 10 sekunder
+gir rundt 864 000 rader i døgnet mot 60 sekunders 144 000. Observasjonene fra
+august ligger på én per tog hvert 49. sekund, så 60 er også det som bevarer
+datatettheten analysene er innstilt på.
+
+En sideeffekt verdt å kjenne: cachen holdes nå alltid varm. `/api/trains` og
+`/api/health` treffer ferske tall i stedet for å utløse en henting, så en
+kald henting er blitt sjelden i stedet for vanlig.
+
 Siste loggede verdi per tog holdes i minnet (`historikk._siste`), ikke slått
 opp i databasen. Den nullstilles ved omstart, med vilje.
 

@@ -22,9 +22,9 @@ Ja, og med svært god margin. Målt på appen som den står:
 | | Målt |
 |---|---|
 | Minne, uvicorn-prosessen | **72 MB** arbeidssett, 59 MB privat |
-| CPU i ro | tilnærmet null — én Entur-henting per 10 s, én SJ-henting per 60 s |
+| CPU i ro | tilnærmet null — én Entur-henting per 60 s fra bakgrunnsjobben, oftere bare hvis noen ser på |
 | Disk, statiske filer | 342 kB til sammen (`hovedbaner.geojson` er den store med 181 kB) |
-| Disk, historikk | 5,0 MB i døgnet — **443 MB i likevekt** etter at rotasjonen kom på 21. august. Var 1,8 GB i året uten tak |
+| Disk, historikk | **Anslag etter 14. september: ~37 MB i døgnet, ~3,3 GB i likevekt.** De gamle tallene — 5 MB og 443 MB — ble målt før bakgrunnsjobben, altså på data som bare ble samlet inn når noen så på kartet. **Mål veksten selv det første døgnet** i stedet for å stole på anslaget |
 | Utgående nett | konstant, uavhengig av antall besøkende — cachene deler ett kall mellom alle faner |
 
 Den siste raden er den viktigste for driftsbildet: **belastningen mot Entur
