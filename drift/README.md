@@ -8,6 +8,7 @@ Alt som handler om at kartet står i morgen, ikke om hva det viser.
 | [tunnel-og-tjeneste.md](tunnel-og-tjeneste.md) | Cloudflare Tunnel, systemd-unit, `.env` i prod, backup av databasen |
 | [docker.md](docker.md) | Samme oppsett i container: `Dockerfile`, `compose.yaml`, cloudflared i samme nettverksnavnerom |
 | `env.produksjon` | Mal for `.env` på serveren |
+| `oppdater.sh` | Utrulling: hent, installer om nødvendig, start om, verifiser |
 
 Sikkerhetsgjennomgangen står i [../docs/sikkerhet.md](../docs/sikkerhet.md).
 
@@ -91,19 +92,35 @@ ingen åpen port mot internett i det hele tatt og opphavs-IP-en eksponeres
 aldri. Det er en vesentlig bedre sikkerhetsposisjon enn nginx på en åpen 443,
 og den kom gratis ved å gjenbruke stromkart-oppsettet.
 
-**Blokkert per 21. august: `togkartet.no` er ikke i Cloudflare.** Domenet er
-registrert, men står parkert hos Domeneshop (`ns1-3.hyp.net`) og svarer ikke
-på HTTPS. `stromkart.no` ligger på Cloudflare-navnetjenere; togkart gjør det
-ikke. Punkt 6 og 7 over kan derfor ikke gjøres ennå — reglene har ingen sone
-å ligge i, og `cloudflared tunnel route dns` vil feile med «zone not found».
+**Satt opp 13. september 2026.** Kartet kjører på
+**<https://togkartet.no>** fra **LXC 106** på Proxmox-verten, ved siden av
+stromkart i 105. Domenet er registrert hos Uniweb; sonen ligger på Cloudflare
+med `ian`/`kinsley` som navnetjenere.
 
-Første steg er å legge til siden i Cloudflare og bytte navnetjenerne hos
-registraren. Det er en registrarhandling med propageringstid, ikke noe som
-kan gjøres fra dette prosjektet.
+Merk navnet: det heter `togkartet.no`. Dokumentasjonen sa `togkart.no` fram
+til denne datoen, og det domenet har aldri vært vårt.
 
-Til det er gjort er per-klient-vernet det `strupe.py` gir alene, i din egen
-prosess i stedet for på kanten. Taket mot Entur ligger uansett bare i appen,
-så den delen er upåvirket.
+Slik den faktisk står:
+
+| | |
+|---|---|
+| Vert | Proxmox, LXC **106** (`togkart`), unprivileged, Debian 13 |
+| Ressurser | 2 kjerner, 1 GB RAM, 16 GB på `local-lvm` — appen bruker **38 MB** |
+| Python | 3.13 fra Debian, venv i `/opt/togkart/.venv` |
+| Kode | `git clone` fra <https://github.com/QFeNaUt/togkart> |
+| Tjeneste | systemd, `togkart.service`, uvicorn på `127.0.0.1:8000` |
+| Tunnel | `cloudflared` som egen systemd-tjeneste i **samme** LXC |
+| Database | `/var/lib/togkart/historikk.db`, WAL |
+
+At `cloudflared` kjører i samme container som appen er ikke tilfeldig: da
+kommer forespørslene til uvicorn fra loopback, og det er nettopp betingelsen
+`_loopback()` i `strupe.py` krever før den stoler på `CF-Connecting-IP`. Se
+punkt 6 over.
+
+Verifisert etter utrulling: `https://togkartet.no/api/health` svarer
+`"ok": true` med `"bakCloudflare": true`, alle fem sikkerhetsheaderne
+overlever gjennom kanten, `/api/docs` er 404, og `http://` omdirigeres 301
+til `https://`.
 
 ## Historikken vedlikeholder seg selv
 

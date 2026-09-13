@@ -1,55 +1,78 @@
 # Tunnel, tjeneste og database på M720Q-en
 
-Konkret oppsett for LXC-en. Antar Debian 12 og at `cloudflared` allerede er
-i bruk for stromkart — er den det, hopp til punkt 2.
+Konkret oppsett for LXC-en. Utført 13. september 2026 på **LXC 106**, Debian
+13, unprivileged.
 
-Se `cloudflare.md` for det som skal settes opp i dashbordet (struping,
-sikkerhetsheadere, cache).
+Se `cloudflare.md` for det som skal settes opp i dashbordet (struping, cache)
+og for hvordan sonen kom på plass.
 
 ---
 
 ## 1. Tunnelen
 
-**Først: `togkartet.no` må inn i Cloudflare.** Domenet står i dag hos
-Domeneshop (`ns1-3.hyp.net`), ikke på Cloudflare-navnetjenere. `cloudflared
-tunnel route dns` under vil feile med «zone not found» til det er gjort. Legg
-til siden i Cloudflare og bytt navnetjenerne hos registraren. Se
-`cloudflare.md`.
+**Fjernstyrt tunnel med token.** Dette punktet beskrev fram til 13. september
+en *lokalt styrt* tunnel — `cloudflared tunnel login`, en `config.yml` med
+ingress-regler, og `cloudflared tunnel route dns`. Det er en helt annen
+oppskrift enn den som ble brukt, og de to skal ikke blandes: i en fjernstyrt
+tunnel ligger ingress-konfigurasjonen i dashbordet, og tokenet *er* hele
+konfigurasjonen på maskinen.
+
+**Opprett tunnelen** i Zero Trust → Networks → Tunnels & Mesh → Create a
+tunnel → **Cloudflared**. Kall den `togkart`. Kopier tokenet — `eyJ...` — fra
+installasjonskommandoen dashbordet viser. Hvilket operativsystem du velger i
+nedtrekkslista spiller ingen rolle; tokenet er det samme.
+
+**Installer i LXC-en:**
 
 ```bash
-# Én gang per maskin
-cloudflared tunnel login
-cloudflared tunnel create togkart
-cloudflared tunnel route dns togkart togkartet.no
+curl -L -o /tmp/cloudflared.deb   https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64.deb
+dpkg -i /tmp/cloudflared.deb
+cloudflared service install eyJ...
 ```
 
-`/etc/cloudflared/config.yml`:
+Kommandoen både lager og starter `cloudflared.service`. Ingen `config.yml`,
+ingen `credentials-file`, ingen `tunnel route dns`. Tokenet legges i
+`/etc/cloudflared/token`.
 
-```yaml
-tunnel: togkart
-credentials-file: /etc/cloudflared/<tunnel-id>.json
+**Ruten settes i dashbordet**, ikke på maskinen: tunnelens side → fanen
+**Published application routes** → Add:
 
-ingress:
-  - hostname: togkartet.no
-    service: http://127.0.0.1:8000
-    originRequest:
-      # Kartet henter jernbanenett.geojson på 856 kB ved hver sidelasting.
-      # Standarden på 30 s holder, men gi den litt luft på en treg linje.
-      connectTimeout: 10s
-      # Ingen TLS mot origin: uvicorn snakker rent HTTP på loopback, og
-      # trafikken forlater aldri maskinen. TLS-en ligger i Cloudflare-enden.
-      noTLSVerify: true
-  - service: http_status:404
-```
+| Felt | Verdi |
+|---|---|
+| Subdomain | tomt |
+| Domain | `togkartet.no` |
+| Path | tomt |
+| Type | **HTTP** |
+| URL | `127.0.0.1:8000` |
+
+Det steget lager CNAME-en i sonen selv. Ikke opprett noen DNS-post for hånd.
+
+**Pass på nabofanen.** «Hostname routes» ser ut som det samme, men er privat
+tilgang gjennom WARP-klienten og gjør ingenting tilgjengelig på internett.
+Kjennetegnet: det skjemaet spør ikke om tjeneste og URL. Riktig skjema må ha
+begge, for det er koblingen til `127.0.0.1:8000` som er hele poenget.
+
+**`HTTP`, ikke HTTPS.** Uvicorn snakker rent HTTP på loopback, og den
+etappen forlater ikke containeren. TLS-en ligger i Cloudflare-enden. Velger
+du HTTPS, må uvicorn servere et sertifikat for `127.0.0.1` som `cloudflared`
+deretter må instrueres om å ikke verifisere — seremoni uten gevinst.
+
+**Én cloudflared per tunnel.** Den som kjører for stromkart i LXC 105 er en
+annen tunnel med et annet token. Ikke gjenbruk.
+
+**Ingen port åpnes.** `cloudflared` ringer ut. DNS mot hjemmet,
+portvideresending og DDNS faller helt bort, og opphavs-IP-en eksponeres
+aldri.
+
+Verifiser:
 
 ```bash
-cloudflared service install
-systemctl enable --now cloudflared
+systemctl status cloudflared --no-pager
+journalctl -u cloudflared -n 20 --no-pager     # «Registered tunnel connection» x4
 ```
 
-**Ingen port åpnes.** `cloudflared` ringer ut. Det betyr at punkt 6 i «Hva som
-skal til» — DNS, portvideresending, DDNS — faller helt bort, og at
-opphavs-IP-en din aldri eksponeres.
+Fire forbindelser er normalt — to datasentre, to forbindelser hver. Målt ved
+utrulling: `osl02` og `arn07`, over QUIC.
 
 ---
 

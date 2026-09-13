@@ -8,6 +8,103 @@ destillerte lærdommene i [docs/erfaringer.md](docs/erfaringer.md).
 
 ---
 
+## 13. september 2026 — i produksjon, på et domene som heter noe annet
+
+Kartet er live på **<https://togkartet.no>**, fra LXC 106 på Proxmox-verten.
+Fra tom container til offentlig nettsted på én kveld. Det som tok tid var
+ikke oppsettet — det var to antakelser som hadde stått i dokumentasjonen i
+tre uker uten å bli prøvd.
+
+**Domenet heter `togkartet.no`.** Ikke `togkart.no`, som `drift/`, `issues/`,
+`docs/sikkerhet.md` og en kommentar i `app.py` hadde sagt siden 21. august.
+Det domenet har aldri vært vårt. 28 forekomster i ti filer er rettet;
+`CHANGELOG.md` og `docs/arkiv/` står urørt, fordi en changelog og et arkiv
+som skrives om i ettertid er noe annet enn en changelog og et arkiv.
+Registraren er **Uniweb** (GROUP.ONE NORWAY AS), ikke Domeneshop.
+
+**DNSSec var i ferd med å bli slått på, og det ville vært dyrt.** Uniweb
+hadde startet en aktivering samme dag. Hadde DS-posten rukket ut i
+`.no`-sonen før navnetjenerne ble byttet, ville domenet blitt utilgjengelig,
+ikke tregt: Cloudflare svarer usignert, og en validerende resolver nekter da
+å levere svaret i det hele tatt. Målt før byttet at ingen DS-post var
+publisert ennå, og slått av i tide. Det er nå det første punktet i
+`drift/cloudflare.md`.
+
+**Norid har to klokker.** Registerdatabasen tok imot navnetjenerbyttet innen
+minutter — synlig i oppslaget på norid.no — men `.no`-sonen ble ikke
+publisert før flere timer senere. Google serverte den gamle delegeringen hele
+veien. Kommandoen som skiller de to, og den eneste som er verdt å polle:
+
+    nslookup -norecurse -type=NS togkartet.no charm.norid.no
+
+Den spør registeret direkte, uten mellomlager. En ferdig support-e-post til
+Uniweb ble skrevet og aldri sendt, fordi endringen landet først.
+
+**Tunnelen er fjernstyrt, ikke lokalt styrt.** `tunnel-og-tjeneste.md` punkt 1
+beskrev `cloudflared tunnel login`, en `config.yml` med ingress-regler og
+`tunnel route dns`. Det som ble brukt er en tunnel opprettet i dashbordet med
+et token, der ingressen ligger hos Cloudflare og `cloudflared service install
+eyJ...` er hele oppsettet på maskinen. De to oppskriftene skal ikke blandes,
+og punktet er skrevet om.
+
+**«Published application routes», ikke «Hostname routes».** Nabofanen i
+dashbordet ser ut som det samme, men er privat tilgang gjennom WARP-klienten
+og publiserer ingenting. Kjennetegnet: den spør ikke om tjeneste og URL.
+
+**Prosjektet lå uten versjonskontroll.** Det holdt så lenge det bare kjørte
+lokalt. `git init`, to innsjekkinger, og repoet ligger nå offentlig på
+<https://github.com/QFeNaUt/togkart>. Utrulling er `git pull` og omstart —
+`drift/oppdater.sh` gjør de tre stegene og venter til `/api/health` er 200
+før den sier seg fornøyd. CI-en i `.github/workflows/selvtester.yml` hadde
+aldri kjørt før i kveld.
+
+**Målt etter utrulling:**
+
+| | |
+|---|---|
+| Minne, uvicorn i LXC | **38 MB** — halvparten av de 72 MB målt på Windows |
+| `/api/health` utenfra | 200, `ok:true`, `bakCloudflare:true` |
+| Forsiden | 200, 12,8 kB, 145 ms |
+| `/api/docs` | 404 — `TOGKART_MILJO=prod` virker |
+| Sikkerhetsheadere | Alle fem overlever gjennom Cloudflare |
+| `http://` | 301 til `https://`, ett hopp |
+| Tunnel | Fire forbindelser, `osl02` og `arn07`, QUIC |
+
+`"bakCloudflare": true` er linja som ikke kunne verifiseres før nå. Den sier
+at `CF-Connecting-IP` når fram, og at strupen teller per besøkende i stedet
+for hele internett i én bøtte — fordi `cloudflared` kjører i samme LXC som
+appen og derfor kobler seg til fra loopback.
+
+**Én feil i den nye systemd-unit'en, funnet av `systemd-analyze verify`:**
+`[Unit]`-seksjonen forsvant under innliming, så `After=network-online.target`
+ble ignorert i stillhet. Tjenesten kjørte likevel — men ville startet før
+nettverket ved en omstart av containeren. Verktøyet som fant den er verdt å
+huske: `systemd-analyze verify` skriver ingenting når alt er i orden.
+
+**Docker-filene finnes, men er ikke veien som ble valgt.** `Dockerfile`,
+`compose.yaml` og `.dockerignore` ble skrevet, bygget og testet før det ble
+klart at verten er Proxmox og at «container» der betyr LXC. De står ved lag
+som alternativ og som presis dokumentasjon av kjøremiljøet. To feil ble
+funnet ved å faktisk bygge dem, og begge er den slags som ikke kan resonneres
+fram:
+
+- **Dockers ignoreringsmønstre er ikke rekursive.** `__pycache__/` traff bare
+  roten, og `prober/__pycache__` fulgte med inn i imaget.
+- **`drift/` kan ikke utelates.** `prober/sjekk_headere.py` punkt 5 leser
+  `drift/cloudflare.md` for å sjekke at koden og dokumentasjonen sier det
+  samme om CSP-en, og falt på `FileNotFoundError` inne i containeren.
+
+**`requirements.txt` er låst med `==`.** `>=` holdt så lenge det bare var en
+lokal `.venv`. Et miljø som bygges på nytt om tre måneder er noe annet: da er
+det ikke lenger koden i git som avgjør hva som kjører.
+
+**`docs/sikkerhet.md` hadde en rad som var blitt usann.** «Sikkerhetsheadere
+og CSP — formulert, ikke satt opp» sto fortsatt under «Enklest å forbedre».
+De har vært sendt av appen selv siden 23. august, og er nå verifisert
+gjennom kanten.
+
+---
+
 ## 24. august 2026 — én ask(), og en probe som løy
 
 De fem utgavene av «post GraphQL, sjekk `errors`» er samlet i

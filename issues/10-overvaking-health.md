@@ -3,34 +3,31 @@ title: "Overvåking: ingen ser på /api/health"
 labels: drift
 ---
 
-Fortsatt sant, og fortsatt et par klikk: **Traffic → Health Checks** i
-Cloudflare, pekt mot `https://togkartet.no/api/health`.
+**Blokkeringen er borte siden 13. september** — `togkartet.no` ligger på
+Cloudflare, og sonen som manglet finnes. Saken sto tidligere og ventet på
+den; nå venter den bare på at noen gjør det.
 
-Blokkert av det samme som resten av kantarbeidet — se «togkartet.no er ikke i
-Cloudflare, så kantvernet finnes ikke». Det finnes ingen sone å legge en
-health check i før domenet er flyttet fra Domeneshop.
-
-**Selve endepunktet er gjort klart 23. august**, og det var det ikke før:
+Selve endepunktet er klart, og var det ikke før 23. august:
 
 - **Statuskoden er nok som kriterium.** Det svarte 200 uansett hvor galt det
   sto til, med `"ok": false` gjemt i kroppen. En overvåker på
   standardinnstillingene ville meldt at alt var i orden mens kartet sto tomt.
-  Nå er det 503 når `ok` er usann. Du *kan* legge til `"ok": true` som
-  kroppssjekk i tillegg, men du trenger det ikke.
+  Nå er det 503 når `ok` er usann.
 - **Ett minutt er en trygg frekvens.** Sjekken henter bare fra Entur når
-  tallene er eldre enn `TOGKART_HELSE_TTL` (fem minutter). Før dette bommet
-  hver eneste sjekk på cachen — `CACHE_TTL` er ti sekunder — og en bom er
-  Vehicle Positions, Journey Planner, rutedata for togene uten GPS og en
-  skriving til historikk.db. Målt: 2,3 sekunder kaldt mot 1,5 millisekunder
-  varmt.
-- **`alderSekunder`** sier hvor gamle tallene er, så et varsel kan skille «nede
-  nå» fra «har stått en stund».
+  tallene er eldre enn `TOGKART_HELSE_TTL` (fem minutter). Målt: 2,3 sekunder
+  kaldt mot 1,5 millisekunder varmt.
+- **`alderSekunder`** skiller «nede nå» fra «har stått en stund».
 
-Når sonen er på plass:
+Det som gjenstår er to steder å velge mellom, og de utelukker ikke hverandre:
 
-1. Traffic → Health Checks → Create.
-2. Sti `/api/health`, forventet kode `200`, intervall 60 s.
-3. Varsling til e-post eller webhook.
+1. **Cloudflare → Traffic → Health Checks.** Sti `/api/health`, forventet kode
+   `200`, intervall 60 s, varsling til e-post. Sjekker utenfra, gjennom hele
+   kjeden — DNS, tunnel, app. Verifiser at den er tilgjengelig på Free-planen.
+2. **Uptime Kuma i LXC 102**, som allerede står og går. Sjekker innenfra og
+   koster ingenting, men ser ikke om tunnelen er nede.
+
+Den første er den som svarer på spørsmålet «kan folk se kartet». Den andre
+svarer på «kjører appen».
 
 Verifiser at kriteriet virker begge veier før du stoler på det — en
 helsesjekk som aldri har vært rød, er en helsesjekk du ikke vet noe om.

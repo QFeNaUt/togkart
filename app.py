@@ -192,10 +192,10 @@ app.add_middleware(Strupe)
 # Sikkerhetsheadere
 # ---------------------------------------------------------------------------
 # Samme mønster som struping, og av samme grunn: kanten er det beste stedet,
-# men kanten er ikke der ennå. `drift/cloudflare.md` har hatt disse fem
-# ferdig formulert siden 21. august, og de kan ikke settes opp - togkartet.no
-# står fortsatt parkert hos registraren, og en Transform Rule trenger en sone
-# å ligge i. Til det er ordnet, sendte serveren ingenting.
+# men kanten var ikke der da disse ble skrevet. `drift/cloudflare.md` hadde
+# hatt de fem ferdig formulert siden 21. august uten at de kunne settes opp -
+# en Transform Rule trenger en sone å ligge i, og togkartet.no kom ikke inn i
+# Cloudflare før 13. september. Til da sendte serveren ingenting.
 #
 # Så de står her i stedet. Det er ikke et nødvendig onde:
 #

@@ -1,5 +1,15 @@
 # TogKart i Docker
 
+> **Dette er ikke veien som ble valgt.** Produksjon kjører uvicorn rett i
+> LXC 106 under systemd, som stromkart — se `tunnel-og-tjeneste.md`. Verten
+> er Proxmox, og «container» betyr LXC der, ikke Docker.
+>
+> Filene under er bygget og testet, og står ved lag som et alternativ: skal
+> TogKart en gang flyttes til en Docker-vert, er `Dockerfile` og
+> `compose.yaml` i prosjektroten klare. De dokumenterer også kjøremiljøet
+> presist — Python-versjon, bruker, skriverettigheter, helsesjekk.
+
+
 `drift/tunnel-og-tjeneste.md` beskriver uvicorn under systemd, rett på verten.
 Denne beskriver det samme oppsettet i container, som er det M720Q-en skal
 kjøre. Alt som handler om Cloudflare-sonen, tunnelen og reglene i dashbordet

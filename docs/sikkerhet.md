@@ -302,7 +302,7 @@ Alt her er minutter, ikke dager:
 | ~~Cache på `/api/search`~~ | **Gjort 20. august** — 10 min, med tak på antall oppslag |
 | ~~Ratebegrensning~~ | **Gjort 21. august** — `strupe.py` i appen, WAF-regler i `drift/cloudflare.md`. Ikke i en reverse proxy; det finnes ingen. Se punkt 2. |
 | ~~`--no-server-header` på uvicorn~~ | **Gjort 21. august** — står i systemd-unitet i `drift/tunnel-og-tjeneste.md` |
-| Sikkerhetsheadere og CSP | **Formulert 21. august**, ikke satt opp — ferdig policy å lime inn i `drift/cloudflare.md` punkt 1. Fem minutter i dashbordet. |
+| ~~Sikkerhetsheadere og CSP~~ | **Gjort 23. august** — `app.py` sender alle fem som middleware, og `prober/sjekk_headere.py` vokter dem i CI. Verifisert gjennom Cloudflare 13. september: alle fem overlever kanten. |
 | SRI-hash på MapLibre, eller last ned filene til `static/` | to attributter, eller én kopiering |
 
 Merk hva som *ikke* er streket over i den nest siste raden. Policyen er

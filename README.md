@@ -9,6 +9,22 @@ det finnes — hvilket togsett som kjører. Nederst til venstre ruller
 driftsmeldingene fra Vy og Go-Ahead; hovrer du over en, markeres det den
 gjelder i kartet, og klikker du, flytter kartet seg dit.
 
+## I drift
+
+Kartet står på **<https://togkartet.no>** — fra en LXC på en mini-PC hjemme,
+gjennom en Cloudflare Tunnel. Det finnes ingen åpen port mot internett;
+`cloudflared` ringer ut.
+
+Utrulling er én kommando i containeren:
+
+```bash
+/opt/togkart/drift/oppdater.sh
+```
+
+Den henter koden, installerer avhengigheter bare hvis `requirements.txt` er
+rørt, starter tjenesten om, og venter til `/api/health` svarer 200 før den
+sier seg fornøyd. Hele oppsettet står i [drift/](drift/).
+
 ## Kom i gang
 
 ```powershell

@@ -22,40 +22,45 @@ må tro på en header.
 
 ---
 
-## Forutsetning: togkartet.no er ikke i Cloudflare ennå
+## Sonen er på plass
 
-**Ingenting under dette punktet kan gjøres før domenet er flyttet.** Målt
-21. august:
+Flyttet **13. september 2026**. Domenet er `togkartet.no` — ikke `togkart.no`,
+som dette dokumentet sa i tre uker — og registraren er **Uniweb**
+(GROUP.ONE NORWAY AS), ikke Domeneshop.
 
 | Domene | Navnetjenere | I Cloudflare |
 |---|---|---|
 | `stromkart.no` | `ian.ns.cloudflare.com`, `kinsley.ns.cloudflare.com` | ja |
-| `togkartet.no` | `ns1.hyp.net`, `ns2.hyp.net`, `ns3.hyp.net` | **nei** |
+| `togkartet.no` | `ian.ns.cloudflare.com`, `kinsley.ns.cloudflare.com` | ja |
 
-`togkartet.no` er registrert, men står parkert hos registraren (Domeneshop/Hyp)
-og svarer ikke på HTTPS. Det finnes altså ingen Cloudflare-sone å legge
-regler i — og reglene under kan ikke opprettes for en sone som ikke er der.
+Begge fikk samme navnetjenerpar, siden de ligger på samme konto.
 
-**Legg dem heller ikke i `stromkart.no`-sonen.** Reglene er skrevet for
-`/api/search` og `/api/statistikk/`, og strupetallene er utledet av hva
-TogKart sin frontend gjør. Påført strømpris-siden ville de vært vilkårlige
-grenser på en tjeneste de ikke beskriver.
+Rekkefølgen som ble fulgt, for den som skal gjøre det igjen med et nytt domene:
 
-Rekkefølgen er derfor:
+1. Cloudflare → Add a site → **Connect a domain** (ikke Transfer — den flytter
+   selve registreringen, og det trengs ikke).
+2. Slett A-postene Cloudflare importerer fra den gamle sonen. De pekte på
+   registrarens parkeringsside, og tunnelen lager sin egen CNAME i steg 5.
+3. **Slå av DNSSec hos registraren først.** Uniweb hadde satt i gang en
+   aktivering samme dag. Hadde DS-posten rukket ut i `.no`-sonen før
+   navnetjenerne ble byttet, ville domenet blitt *utilgjengelig* — Cloudflare
+   svarer usignert, og en validerende resolver nekter da å levere svaret i det
+   hele tatt. Det retter seg ikke før DS-posten er ute igjen.
+4. Bytt navnetjenerne hos registraren. Hos Uniweb ligger det under
+   **Navnetjener**, ikke under DNS-administrasjon.
+5. Tunnelen — `tunnel-og-tjeneste.md`.
 
-1. **Legg til `togkartet.no` i Cloudflare** (Add a site) og bytt navnetjenerne
-   hos Domeneshop til de to Cloudflare oppgir. Propagering tar fra minutter
-   til et døgn.
-2. **Sett opp tunnelen** — `drift/tunnel-og-tjeneste.md`.
-3. **Så reglene under.** Først da har de en sone å virke i.
+**To klokker, og de er ikke den samme.** Norid tar imot endringen i
+registerdatabasen med én gang — den var synlig i oppslaget på `norid.no`
+innen minutter — men publiserer den i `.no`-sonen periodisk. Kommandoen som
+skiller de to:
 
-Til det er gjort, er vernet det `strupe.py` gir alene. Det er ikke ingenting
-— bakstopperen struper per klient, og taket mot Entur er uansett bare i
-appen — men per-klient-delen ligger da i din egen prosess i stedet for på
-kanten, og koster deg båndbredden inn.
+```powershell
+nslookup -norecurse -type=NS togkartet.no charm.norid.no
+```
 
----
-
+Den spør registeret direkte og går utenom alle mellomlagre. Google svarte med
+den gamle delegeringen i timevis etter at endringen var et faktum.
 
 ## Det du må gjøre selv
 

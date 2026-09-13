@@ -21,6 +21,13 @@ Løste saker er fjernet herfra etter hvert:
   var ikke arkivert, den er den første kommandoen i README.
 - **12** «ask() finnes i fem utgaver — samle i prober/felles.py» — 24. august.
   Én av de fem sjekket ikke `errors`, og løy derfor om skjemaet.
+- **08** «togkart.no er ikke i Cloudflare, så kantvernet finnes ikke» —
+  13. september. Saken sto på feil domene hele veien: det heter `togkartet.no`,
+  og det er registrert hos Uniweb, ikke Domeneshop. Sonen er nå på Cloudflare
+  og kartet er live.
+Issue **10** «Overvåking: ingen ser på /api/health» er *ikke* løst, men
+avblokkert: sonen den ventet på finnes fra 13. september. Den ligger igjen
+her, omskrevet til det som faktisk gjenstår.
 
 Alle er dokumentert i [CHANGELOG.md](../CHANGELOG.md) og
 [docs/undersokelser.md](../docs/undersokelser.md).
