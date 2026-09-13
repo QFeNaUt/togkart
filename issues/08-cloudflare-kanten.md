@@ -1,5 +1,5 @@
 ---
-title: "togkart.no er ikke i Cloudflare, så kantvernet finnes ikke"
+title: "togkartet.no er ikke i Cloudflare, så kantvernet finnes ikke"
 labels: sikkerhet, drift
 ---
 
@@ -14,10 +14,10 @@ er en DNS-migrering først.
 ```
 | Domene         | Navnetjenere                    | I Cloudflare |
 | stromkart.no   | ian / kinsley .ns.cloudflare.com | ja          |
-| togkart.no     | ns1 / ns2 / ns3 .hyp.net         | nei         |
+| togkartet.no     | ns1 / ns2 / ns3 .hyp.net         | nei         |
 ```
 
-`togkart.no` er registrert, men står parkert hos Domeneshop og svarer ikke på
+`togkartet.no` er registrert, men står parkert hos Domeneshop og svarer ikke på
 HTTPS. Det finnes altså ingen sone å legge regler i, og reglene kan ikke
 opprettes for en sone som ikke er der. **Legg dem heller ikke i
 `stromkart.no`-sonen** — de er skrevet for `/api/search` og
@@ -25,13 +25,13 @@ opprettes for en sone som ikke er der. **Legg dem heller ikke i
 
 Rekkefølgen, som står utførlig i `drift/cloudflare.md`:
 
-1. Legg til `togkart.no` i Cloudflare og bytt navnetjenerne hos Domeneshop.
+1. Legg til `togkartet.no` i Cloudflare og bytt navnetjenerne hos Domeneshop.
 2. Sett opp tunnelen — `drift/tunnel-og-tjeneste.md`.
 3. Så de tre gjenstående reglene. **Regel 3, ratebegrensningen, er den
    viktigste.**
 4. Sett `TOGKART_BAK_CLOUDFLARE=1` i `.env`, ellers teller `strupe.py` hele
    internett i én bøtte. Verifiser med
-   `curl -s https://togkart.no/api/health` — `"bakCloudflare": true`.
+   `curl -s https://togkartet.no/api/health` — `"bakCloudflare": true`.
 
 Til det er gjort, er vernet det `strupe.py` gir alene. Det er ikke ingenting —
 bakstopperen struper per klient, og taket mot Entur er uansett bare i appen —

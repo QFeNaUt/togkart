@@ -127,7 +127,7 @@ Punktet målte svaret fra `/` og fant bare `server`, `content-type`, `etag` og
 
 Avsnittet sa at det «koster ingenting å legge på i proxyen», og pekte på
 Cloudflare. Det er fortsatt riktig — men det stedet finnes ikke ennå:
-`togkart.no` står parkert hos registraren, og en Transform Rule trenger en
+`togkartet.no` står parkert hos registraren, og en Transform Rule trenger en
 sone å ligge i. En policy som venter på en DNS-migrering er ingen policy.
 
 Headerne sendes derfor av `app.py`, som middleware ytterst i stakken. Samme

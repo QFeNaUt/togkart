@@ -57,7 +57,7 @@ ignoreres uten et ord i loggen, og strupen teller hele internett i én bøtte.
 docker compose ps                       # begge skal stå "Up", togkart "healthy"
 docker compose exec togkart python sjekk.py alle
 docker compose exec togkart python prober/sjekk_helse.py
-curl -s https://togkart.no/api/health | grep -E 'ok|bakCloudflare'
+curl -s https://togkartet.no/api/health | grep -E 'ok|bakCloudflare'
 ```
 
 `"bakCloudflare": true` er den ene linja som ikke kan utledes av at siden
@@ -139,7 +139,7 @@ To ting ble funnet ved å måle, og begge er rettet:
   samme om CSP-en, og falt på `FileNotFoundError` inne i containeren.
 
 Det som fortsatt ikke er prøvd, er cloudflared-halvdelen: den krever et
-tunneltoken og en Cloudflare-sone, og sonen finnes ikke før `togkart.no` er
+tunneltoken og en Cloudflare-sone, og sonen finnes ikke før `togkartet.no` er
 flyttet fra Domeneshop. `network_mode` er altså resonnert fram fra
 `_loopback()` i `strupe.py`, ikke observert. Det er `"bakCloudflare": true`
 i `/api/health` som avgjør om det stemmer, og den kan først leses når tunnelen

@@ -16,7 +16,7 @@
 # først den dagen noen hamrer: alle besøkende strupes samtidig.
 #
 # Kontroll etter oppstart:
-#     curl -s https://togkart.no/api/health | grep bakCloudflare
+#     curl -s https://togkartet.no/api/health | grep bakCloudflare
 #     -> "bakCloudflare": true
 
 services:

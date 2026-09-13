@@ -10,7 +10,7 @@ sikkerhetsheadere, cache).
 
 ## 1. Tunnelen
 
-**Først: `togkart.no` må inn i Cloudflare.** Domenet står i dag hos
+**Først: `togkartet.no` må inn i Cloudflare.** Domenet står i dag hos
 Domeneshop (`ns1-3.hyp.net`), ikke på Cloudflare-navnetjenere. `cloudflared
 tunnel route dns` under vil feile med «zone not found» til det er gjort. Legg
 til siden i Cloudflare og bytt navnetjenerne hos registraren. Se
@@ -20,7 +20,7 @@ til siden i Cloudflare og bytt navnetjenerne hos registraren. Se
 # Én gang per maskin
 cloudflared tunnel login
 cloudflared tunnel create togkart
-cloudflared tunnel route dns togkart togkart.no
+cloudflared tunnel route dns togkart togkartet.no
 ```
 
 `/etc/cloudflared/config.yml`:
@@ -30,7 +30,7 @@ tunnel: togkart
 credentials-file: /etc/cloudflared/<tunnel-id>.json
 
 ingress:
-  - hostname: togkart.no
+  - hostname: togkartet.no
     service: http://127.0.0.1:8000
     originRequest:
       # Kartet henter jernbanenett.geojson på 856 kB ved hver sidelasting.
@@ -199,7 +199,7 @@ sqlite3 /var/lib/togkart/historikk.db \
 curl -s http://127.0.0.1:8000/api/health | python3 -m json.tool
 
 # Utenfra
-curl -s https://togkart.no/api/health | python3 -m json.tool
+curl -s https://togkartet.no/api/health | python3 -m json.tool
 ```
 
 Fem ting å se etter i svaret:
@@ -236,7 +236,7 @@ ikke virker — se punkt 4.
 
 `/api/health` hjelper ikke hvis ingen ser på den. Cloudflare har
 **Health Checks** innebygget (Traffic → Health Checks) — pek den mot
-`https://togkart.no/api/health`. Da får du varsel når appen står, tunnelen
+`https://togkartet.no/api/health`. Da får du varsel når appen står, tunnelen
 faller, eller Entur er nede, uten å sette opp noe på maskinen.
 
 **Statuskoden er nok som kriterium.** Endepunktet svarer 503 når `ok` er

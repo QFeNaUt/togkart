@@ -91,7 +91,7 @@ ingen åpen port mot internett i det hele tatt og opphavs-IP-en eksponeres
 aldri. Det er en vesentlig bedre sikkerhetsposisjon enn nginx på en åpen 443,
 og den kom gratis ved å gjenbruke stromkart-oppsettet.
 
-**Blokkert per 21. august: `togkart.no` er ikke i Cloudflare.** Domenet er
+**Blokkert per 21. august: `togkartet.no` er ikke i Cloudflare.** Domenet er
 registrert, men står parkert hos Domeneshop (`ns1-3.hyp.net`) og svarer ikke
 på HTTPS. `stromkart.no` ligger på Cloudflare-navnetjenere; togkart gjør det
 ikke. Punkt 6 og 7 over kan derfor ikke gjøres ennå — reglene har ingen sone

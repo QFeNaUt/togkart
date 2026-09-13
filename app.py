@@ -193,7 +193,7 @@ app.add_middleware(Strupe)
 # ---------------------------------------------------------------------------
 # Samme mønster som struping, og av samme grunn: kanten er det beste stedet,
 # men kanten er ikke der ennå. `drift/cloudflare.md` har hatt disse fem
-# ferdig formulert siden 21. august, og de kan ikke settes opp - togkart.no
+# ferdig formulert siden 21. august, og de kan ikke settes opp - togkartet.no
 # står fortsatt parkert hos registraren, og en Transform Rule trenger en sone
 # å ligge i. Til det er ordnet, sendte serveren ingenting.
 #

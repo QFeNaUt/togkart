@@ -22,7 +22,7 @@ må tro på en header.
 
 ---
 
-## Forutsetning: togkart.no er ikke i Cloudflare ennå
+## Forutsetning: togkartet.no er ikke i Cloudflare ennå
 
 **Ingenting under dette punktet kan gjøres før domenet er flyttet.** Målt
 21. august:
@@ -30,9 +30,9 @@ må tro på en header.
 | Domene | Navnetjenere | I Cloudflare |
 |---|---|---|
 | `stromkart.no` | `ian.ns.cloudflare.com`, `kinsley.ns.cloudflare.com` | ja |
-| `togkart.no` | `ns1.hyp.net`, `ns2.hyp.net`, `ns3.hyp.net` | **nei** |
+| `togkartet.no` | `ns1.hyp.net`, `ns2.hyp.net`, `ns3.hyp.net` | **nei** |
 
-`togkart.no` er registrert, men står parkert hos registraren (Domeneshop/Hyp)
+`togkartet.no` er registrert, men står parkert hos registraren (Domeneshop/Hyp)
 og svarer ikke på HTTPS. Det finnes altså ingen Cloudflare-sone å legge
 regler i — og reglene under kan ikke opprettes for en sone som ikke er der.
 
@@ -43,7 +43,7 @@ grenser på en tjeneste de ikke beskriver.
 
 Rekkefølgen er derfor:
 
-1. **Legg til `togkart.no` i Cloudflare** (Add a site) og bytt navnetjenerne
+1. **Legg til `togkartet.no` i Cloudflare** (Add a site) og bytt navnetjenerne
    hos Domeneshop til de to Cloudflare oppgir. Propagering tar fra minutter
    til et døgn.
 2. **Sett opp tunnelen** — `drift/tunnel-og-tjeneste.md`.
@@ -88,7 +88,7 @@ Sett du bare den ene av dem, virker appen — men den ene halvparten av vernet
 du tror du har, finnes ikke. Sjekk med:
 
 ```bash
-curl -s https://togkart.no/api/health | python -m json.tool
+curl -s https://togkartet.no/api/health | python -m json.tool
 # "strupe": { "aktiv": true, "bakCloudflare": true, ... }
 ```
 
@@ -99,7 +99,7 @@ går gjennom tunnelen som alle andre svar. **Du trenger ikke gjøre noe her.**
 
 Begrunnelsen står i `../docs/sikkerhet.md` punkt 3, og den korte versjonen er
 at dette punktet ventet på en DNS-migrering: en Transform Rule trenger en sone
-å ligge i, og `togkart.no` står fortsatt hos registraren. En policy som venter
+å ligge i, og `togkartet.no` står fortsatt hos registraren. En policy som venter
 er ingen policy.
 
 **Ikke sett dem opp her i tillegg.** «Set static» overskriver det origin
@@ -197,7 +197,7 @@ Fire forbehold, så ingen av dem kommer som en overraskelse:
 Verifiser etterpå — CSP-feil er stille i alt annet enn konsollen:
 
 ```bash
-curl -sI https://togkart.no/ | grep -i "content-security\|x-content-type\|referrer"
+curl -sI https://togkartet.no/ | grep -i "content-security\|x-content-type\|referrer"
 ```
 
 Og åpne kartet med utviklerkonsollen oppe. Står det `Refused to load` der,
@@ -291,7 +291,7 @@ i `strupe.py` som ikke teller besøkende i det hele tatt, bare utgående kall:
 Den ser du i helsesjekken:
 
 ```bash
-curl -s https://togkart.no/api/health | python -m json.tool
+curl -s https://togkartet.no/api/health | python -m json.tool
 ```
 
 ```json
@@ -319,7 +319,7 @@ Cloudflare, og du tester ingenting):
 ```bash
 # Skal gi noen 200 og deretter 429 fra Cloudflare
 for i in $(seq 1 40); do
-  curl -s -o /dev/null -w "%{http_code} " "https://togkart.no/api/search?q=test$i"
+  curl -s -o /dev/null -w "%{http_code} " "https://togkartet.no/api/search?q=test$i"
 done; echo
 ```
 

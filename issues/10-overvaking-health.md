@@ -4,9 +4,9 @@ labels: drift
 ---
 
 Fortsatt sant, og fortsatt et par klikk: **Traffic → Health Checks** i
-Cloudflare, pekt mot `https://togkart.no/api/health`.
+Cloudflare, pekt mot `https://togkartet.no/api/health`.
 
-Blokkert av det samme som resten av kantarbeidet — se «togkart.no er ikke i
+Blokkert av det samme som resten av kantarbeidet — se «togkartet.no er ikke i
 Cloudflare, så kantvernet finnes ikke». Det finnes ingen sone å legge en
 health check i før domenet er flyttet fra Domeneshop.
 
