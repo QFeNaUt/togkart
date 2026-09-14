@@ -8,6 +8,52 @@ og for hvordan sonen kom på plass.
 
 ---
 
+## 0. Containeren i Proxmox
+
+Laget med **Create CT** i nettgrensesnittet. Ressursene og begrunnelsen for dem
+står i `README.md`. Her står det som ikke sto noe sted, og som var feil.
+
+**«Start after created» er ikke «Start at boot».** Avkryssingen på siste side i
+opprettelsesveiviseren starter containeren én gang, rett etter at den er laget.
+Det er noe annet enn å starte den når verten starter. Den innstillingen ligger
+under **Options → Start at boot**, og står av som standard.
+
+14. september sto både `togkart` (106) og `stromkart` (105) uten den. Begge
+nettstedene ville blitt liggende av etter en omstart av verten, for eksempel
+etter et strømbrudd eller en kjerneoppdatering, og ingenting ville sagt fra.
+For stromkart hadde det vært slik i minst 84 dager. Det slo aldri til, fordi
+verten hadde stått oppe i 140 dager.
+
+```bash
+pct set 106 --onboot 1 --startup order=3
+```
+
+**AdGuard starter først.** De andre gjestene trenger DNS:
+
+```bash
+pct set 101 --startup order=1,up=15
+```
+
+`order=1` starter AdGuard først, og `up=15` venter 15 sekunder før neste gjest.
+Proxmox starter gjester med rekkefølge før gjester uten, og stopper dem i
+motsatt rekkefølge, så det er nok å sette rekkefølge på dem det gjelder.
+
+For togkart er rekkefølgen ikke kritisk. Starter den før DNS er klar, feiler de
+første hentingene, og bakgrunnsjobben prøver igjen etter 60 sekunder. Men det
+er ryddigere at den ikke må.
+
+**Sjekk alle gjestene på én gang**, fra Proxmox-shellet:
+
+```bash
+for id in $(pct list | awk 'NR>1{print $1}'); do
+  echo "$id $(pct config $id | grep -E '^(hostname|onboot|startup)' | tr '\n' ' ')"
+done
+```
+
+En gjest uten `onboot: 1` starter ikke av seg selv.
+
+---
+
 ## 1. Tunnelen
 
 **Fjernstyrt tunnel med token.** Dette punktet beskrev fram til 13. september
@@ -275,29 +321,60 @@ ikke virker — se punkt 4.
 
 ## 6. Overvåking
 
-`/api/health` hjelper ikke hvis ingen ser på den. Cloudflare har
-**Health Checks** innebygget (Traffic → Health Checks) — pek den mot
-`https://togkartet.no/api/health`. Da får du varsel når appen står, tunnelen
-faller, eller Entur er nede, uten å sette opp noe på maskinen.
+`/api/health` hjelper ikke hvis ingen ser på den.
 
-**Statuskoden er nok som kriterium.** Endepunktet svarer 503 når `ok` er
-usann, så standardinnstillingen «2xx = frisk» er riktig. Du kan legge til
-`"ok": true` som kroppssjekk i tillegg, men du trenger det ikke — og det er
-poenget: den samme sjekken virker i en uptime-tjeneste, i en `curl -f` og i en
-systemd-timer, uten at noen må huske å konfigurere kroppsmatching.
+**Statuskoden er nok som kriterium.** Endepunktet svarer 503 når `ok` er usann,
+så standardinnstillingen «2xx = frisk» er riktig i enhver overvåker. Til 23.
+august svarte det 200 uansett, med `"ok": false` gjemt i kroppen. En overvåker
+på standardverdier ville da sagt at alt var i orden mens kartet sto tomt.
 
-Til 23. august svarte den 200 uansett hvor galt det sto til, med `"ok": false`
-gjemt i kroppen. En overvåker satt opp på standardverdiene ville sagt at alt
-var i orden mens kartet sto tomt.
+**Ett minutt er en fin frekvens.** Sjekken henter bare fra Entur når tallene er
+eldre enn `TOGKART_HELSE_TTL` (fem minutter). Siden 14. september holder
+bakgrunnsjobben dessuten cachen varm, så en sjekk treffer nesten alltid ferske
+tall.
 
-**Ett minutt er en fin frekvens.** Sjekken henter bare fra Entur når tallene
-er eldre enn `TOGKART_HELSE_TTL` (fem minutter), så en monitor på ett minutt
-koster én henting per femte sjekk. Går hentingen i stykker, blir cachen aldri
-fersk igjen, og da prøver sjekken på ekte hver gang — som er nøyaktig når du
-vil at den skal gjøre det.
+### Hvor sjekken står, avgjør hva den ser
 
-`prober/sjekk_helse.py` vokter alt dette uten nett og uten database, og står i
-CI.
+| Overvåker | Ser | Ser ikke |
+|---|---|---|
+| **Uptime Kuma** (LXC 102) mot `https://togkartet.no/api/health` | appen, bakgrunnsjobben, tunnelen, Cloudflare, DNS | at **verten eller hjemmelinja** er nede — da er Uptime Kuma borte selv |
+| **Utenfor huset** mot samme adresse | alt over, **og** at huset er borte | — |
 
-Det dekker punktet om overvåking under «Krever mer innsats» i
-`../docs/sikkerhet.md`.
+Det finnes ikke noe tredje alternativ der Uptime Kuma sjekker appen «innenfra».
+Uvicorn binder `127.0.0.1` inne i LXC 106, så `http://<106>:8000` kan ikke nås
+fra en annen container. Det er med vilje (punkt 2). Den offentlige adressen er
+eneste vei, og den går ut på internett og tilbake gjennom tunnelen — altså hele
+kjeden.
+
+### Uptime Kuma
+
+| Felt | Verdi |
+|---|---|
+| Monitor Type | **HTTP(s)** |
+| URL | `https://togkartet.no/api/health` |
+| Heartbeat Interval | 60 |
+| Accepted Status Codes | `200-299` |
+
+**Uten en varsling er det bare et dashbord ingen ser på.** Legg inn en under
+Settings → Notifications (e-post, Telegram, ntfy) og koble den til overvåkeren.
+
+### Utenfor huset
+
+Uptime Kuma kan ikke melde at strømmen er borte i huset den selv står i. Det
+krever en sjekk et annet sted. Cloudflare har **Health Checks** (Traffic →
+Health Checks), pekt mot samme adresse. **Det er ikke verifisert om den er
+tilgjengelig på Free-planen.** Er den ikke det, gjør en gratis ekstern
+uptime-tjeneste samme jobb.
+
+### Se den bli rød
+
+En sjekk som aldri har feilet, vet du ingenting om:
+
+```bash
+systemctl stop togkart      # i LXC 106
+# vent til overvåkeren er rød og varselet har kommet
+systemctl start togkart
+```
+
+`prober/sjekk_helse.py` vokter endepunktet og feltene i det uten nett og uten
+database, og står i CI.
