@@ -381,23 +381,143 @@ mot domenet i hele max-age-perioden, og den kan ikke rulles tilbake ved å slås
 av: nettleserne husker uansett. Slå den på når oppsettet har stått et døgn, med
 seks måneder og **uten** preload.
 
-## Testing
+### 6. www til hovedadressen
 
-Fra en maskin **utenfor** huset (ellers går trafikken ikke gjennom
-Cloudflare, og du tester ingenting):
+**Rules → Redirect Rules.** Satt opp 14. september.
 
-```bash
-# Skal gi noen 200 og deretter 429 fra Cloudflare
-for i in $(seq 1 40); do
-  curl -s -o /dev/null -w "%{http_code} " "https://togkartet.no/api/search?q=test$i"
-done; echo
+Før dette svarte `www.togkartet.no` ingenting. Noen skriver `www.` av gammel
+vane.
+
+**DNS-posten:**
+
+| Type | Name | Content | Proxy |
+|---|---|---|---|
+| AAAA | `www` | `100::` | **Proxied** |
+
+`100::` er et adresseområde som er reservert for å ikke gå noe sted. Posten
+finnes bare for å få navnet inn i Cloudflare, der regelen under fanger opp
+forespørselen før den skulle ha gått noe sted.
+
+**En felle som ble sjekket:** en AAAA-post alene kunne ha stengt ute brukere
+som bare har IPv4. Det gjør den ikke. Cloudflare svarer med både A- og
+AAAA-adresser for alle proxied navn, uansett posttype:
+
+```
+A:    188.114.96.1 | 188.114.97.1
+AAAA: 2a06:98c1:3120::1 | 2a06:98c1:3121::1
 ```
 
-Blir alle 200, er regelen ikke aktiv — se etter om den står i «Log»-modus i
-stedet for «Block».
+**Regelen**, laget fra malen «Redirect from WWW to root»:
 
-Lokalt, uten Cloudflare, tester du bakstopperen med samme løkke mot
-`http://127.0.0.1:8000`. Da er det `strupe.py` som svarer 429, ikke kanten.
+```
+Navn:              www til togkartet.no
+Match:             Wildcard pattern
+Request URL:       https://www.*
+Target URL:        https://${1}
+Status:            301
+Preserve query:    på
+```
+
+`*` fanger alt etter `www.`, så stien følger med. Query-strengen er ikke med i
+det mønsteret matcher mot, og uten avhukingen ville `?dager=7` forsvunnet.
+
+**Hvorfor omdirigering på kanten, og ikke en ekstra rute i tunnelen:** en
+rute ville gitt to adresser til samme side, og forespørselen ville gått hele
+veien hjem til M720Q-en for å bli sendt tilbake. Nå skjer det i Oslo.
+
+**Mønsteret dekker bare `https://`, og det er greit.** Always Use HTTPS (punkt
+5) sender `http://www` til `https://www` først, så tar regelen over. To hopp
+for de få som skriver både `http://` og `www.` for hånd.
+
+**Verifisert utenfra:**
+
+```
+https://www.togkartet.no/                      301 -> https://togkartet.no/
+https://www.togkartet.no/api/...?dager=7       301 -> https://togkartet.no/api/...?dager=7
+http://www.togkartet.no/                       2 hopp, ender på 200
+https://togkartet.no/                          200 - hovedadressen urørt
+```
+
+**Virker det ikke hjemme, men utenfra?** Da er det en lokal resolver som
+husker at navnet ikke fantes. AdGuard i LXC 101 gjorde nettopp det i flere
+timer etter at posten var lagt inn — samme negative mellomlagring som
+hoveddomenet fikk ved flyttingen. Test utenom lokal DNS med
+`curl --resolve www.togkartet.no:443:188.114.96.1 ...`, og tøm AdGuards
+mellomlager (Settings → DNS settings) hvis du ikke vil vente.
+
+### 7. E-postforfalskning
+
+**DNS → Records.** Satt opp 14. september.
+
+Domenet sender og mottar ikke e-post, og skal ikke gjøre det. Men uten disse
+postene kunne hvem som helst sende e-post som så ut til å komme fra
+`noe@togkartet.no`, og mottakerne hadde ingen regel å sjekke mot. Et domene
+med et ekte, synlig nettsted bak er mer verdt å misbruke enn et parkert.
+
+Løsningen for et domene som *aldri* sender e-post, er å si det offentlig:
+
+| Type | Name | Content |
+|---|---|---|
+| TXT | `@` | `v=spf1 -all` |
+| TXT | `_dmarc` | `v=DMARC1; p=reject; sp=reject; adkim=s; aspf=s` |
+| TXT | `*._domainkey` | `v=DKIM1; p=` |
+
+- **SPF `-all`**: ingen server har lov til å sende for domenet.
+- **DMARC `p=reject`**: mottakere skal avvise post som ikke består, ikke legge
+  den i søppelpost. `sp=reject` gjelder det samme for underdomener.
+- **Den tomme DKIM-nøkkelen under et jokertegn**: det finnes ingen gyldige
+  signaturer, uansett hvilket selektornavn en forfalsker prøver.
+
+**Ingen MX-post, med vilje.** Anbefalingen «Email cannot reach
+@togkartet.no» blir derfor stående i dashbordet. Den kan ignoreres.
+
+**Verifisert fra Google,** med to vilkårlige selektornavn for å bekrefte at
+jokertegnet virker:
+
+```
+togkartet.no                 TXT   v=spf1 -all
+_dmarc.togkartet.no          TXT   v=DMARC1; p=reject; sp=reject; adkim=s; aspf=s
+default._domainkey           TXT   v=DKIM1; p=
+google._domainkey            TXT   v=DKIM1; p=
+```
+
+**Skal domenet en gang få e-post, må disse endres FØRST.** Legger du inn MX og
+begynner å sende uten å rette SPF og DMARC, avviser mottakerne din egen post —
+på din egen instruks, og uten at du får noen feilmelding.
+
+`stromkart.no` er satt opp på samme måte og har sannsynligvis det samme hullet.
+
+## Testing
+
+**Ratebegrensningen**, fra hvilken som helst maskin — også hjemme. Trafikk mot
+`togkartet.no` går gjennom Cloudflare uansett hvor den kommer fra. Det er bare
+`http://127.0.0.1:8000` inne i LXC-en som går utenom.
+
+```bash
+# 60 kall, 10 samtidige. Skal gi rundt 30 × 200 og deretter 429.
+seq 1 60 | xargs -P 10 -I{} curl -s -o /dev/null -w "%{http_code} "   https://togkartet.no/api/trains; echo
+```
+
+Kallene må gå samtidig. Grensen er 30 per 10 sekunder, og en løkke der hvert
+`curl` venter på det forrige, rekker ikke alltid over 30 innenfor vinduet.
+
+**Hvem svarte 429?** Se på headerne:
+
+```bash
+curl -s -D- -o /dev/null https://togkartet.no/api/trains | grep -iE "^(server|cf-ray|content-security)"
+```
+
+| Kanten stoppet den | `strupe.py` stoppet den |
+|---|---|
+| `Server: cloudflare` | Appens headere |
+| `CF-RAY` med datasenter, f.eks. `-OSL` | |
+| **Ingen** `content-security-policy` | `content-security-policy` **er med** |
+
+CSP-headeren settes av middleware i appen. Mangler den, nådde forespørselen
+aldri M720Q-en.
+
+Blir alle 200, er regelen ikke aktiv. Se etter om den står i «Log»-modus i
+stedet for «Block».
 
 ---
 
@@ -405,16 +525,19 @@ Lokalt, uten Cloudflare, tester du bakstopperen med samme løkke mot
 
 | Vern | Hvor | Fil / sted |
 |---|---|---|
-| Per-IP-struping | Cloudflare WAF | punkt 3 over |
+| Per-IP-struping | Cloudflare, Rate limiting | punkt 3 |
 | Per-IP-struping, bakstopper | appen | `strupe.py`, `GRENSER` |
 | **Tak på utgående Entur-kall** | **appen — kan ikke løses foran** | `strupe.py`, `ENTUR_GEOKODER` |
-| Sikkerhetsheadere og CSP | Cloudflare Transform Rules | punkt 1 over |
-| API utenom cache | Cloudflare Caching Rules | punkt 2 over |
-| TLS og sertifikat | Cloudflare | automatisk |
+| Sikkerhetsheadere og CSP | appen, middleware | punkt 1, `app.py` |
+| API utenom cache | Cloudflare, Cache Rules | punkt 2 |
+| GeoJSON servert fra kanten | Cloudflare, Cache Rules | punkt 2 |
+| Full (Strict), Always Use HTTPS | Cloudflare, SSL/TLS | punkt 5 |
+| www til hovedadressen | Cloudflare, Redirect Rules | punkt 6 |
+| Vern mot e-postforfalskning | DNS, SPF/DKIM/DMARC | punkt 7 |
 | Skjule opphavs-IP | Cloudflare Tunnel | automatisk — ingen port åpnes |
 
 Legg merke til den siste raden. Med tunnel er det ingen portvideresending og
-ingen åpen port mot internett i det hele tatt, og punkt 6 i «Hva som skal til»
-i den gamle utrullingslista — DNS, portåpning, DDNS — faller bort. `cloudflared` ringer ut.
-Det er en vesentlig bedre sikkerhetsposisjon enn nginx på en åpen 443, og den
-kom du til gratis ved å gjenbruke stromkart-oppsettet.
+ingen åpen port mot internett i det hele tatt — DNS mot hjemmet, portåpning og
+DDNS faller bort. `cloudflared` ringer ut. Det er en vesentlig bedre
+sikkerhetsposisjon enn nginx på en åpen 443, og den kom gratis ved å gjenbruke
+stromkart-oppsettet.
