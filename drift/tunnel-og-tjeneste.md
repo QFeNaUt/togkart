@@ -109,6 +109,8 @@ annen tunnel med et annet token. Ikke gjenbruk.
 **Ingen port åpnes.** `cloudflared` ringer ut. DNS mot hjemmet,
 portvideresending og DDNS faller helt bort, og opphavs-IP-en eksponeres
 aldri.
+Portvideresending var heller aldri et alternativ: linja står bak CGNAT og har
+ingen offentlig IPv4-adresse. Se «Nettverket hjemme» i `README.md`.
 
 Verifiser:
 

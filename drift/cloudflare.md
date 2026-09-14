@@ -541,3 +541,7 @@ ingen åpen port mot internett i det hele tatt — DNS mot hjemmet, portåpning 
 DDNS faller bort. `cloudflared` ringer ut. Det er en vesentlig bedre
 sikkerhetsposisjon enn nginx på en åpen 443, og den kom gratis ved å gjenbruke
 stromkart-oppsettet.
+
+Bak Eidsivas CGNAT var tunnelen dessuten den eneste muligheten: hjemmelinja har
+ingen offentlig IPv4-adresse, så portvideresending går ikke. Se «Nettverket
+hjemme» i `README.md`.

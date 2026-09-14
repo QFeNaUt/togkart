@@ -93,6 +93,10 @@ ingen åpen port mot internett i det hele tatt og opphavs-IP-en eksponeres
 aldri. Det er en vesentlig bedre sikkerhetsposisjon enn nginx på en åpen 443,
 og den kom gratis ved å gjenbruke stromkart-oppsettet.
 
+**Og bak Eidsivas CGNAT fantes det ikke noe alternativ.** Hjemmelinja har
+ingen offentlig IPv4-adresse, så portvideresending er ikke mulig i det hele
+tatt. Se «Nettverket hjemme» under.
+
 **Satt opp 13. september 2026.** Kartet kjører på
 **<https://togkartet.no>** fra **LXC 106** på Proxmox-verten, ved siden av
 stromkart i 105. Domenet er registrert hos Uniweb; sonen ligger på Cloudflare
@@ -106,6 +110,7 @@ Slik den faktisk står:
 | | |
 |---|---|
 | Vert | Proxmox, LXC **106** (`togkart`), unprivileged, Debian 13 |
+| Adresse | `192.168.2.147` fra DHCP — fast `.56` er planlagt, se «Nettverket hjemme» |
 | Ressurser | 2 kjerner, 1 GB RAM, 16 GB på `local-lvm` — appen bruker **38 MB** |
 | Python | 3.13 fra Debian, venv i `/opt/togkart/.venv` |
 | Kode | `git clone` fra <https://github.com/QFeNaUt/togkart> |
@@ -122,6 +127,91 @@ Verifisert etter utrulling: `https://togkartet.no/api/health` svarer
 `"ok": true` med `"bakCloudflare": true`, alle fem sikkerhetsheaderne
 overlever gjennom kanten, `/api/docs` er 404, og `http://` omdirigeres 301
 til `https://`.
+
+## Nettverket hjemme
+
+Avlest i Eidsiva Digitals kundeportal og målt fra hjemmenettet 14. september
+2026.
+
+### Bak Carrier-Grade NAT
+
+```
+WAN IPv4-adresse   100.65.192.212
+```
+
+Adresser i `100.64.0.0/10` er ikke offentlige. Eidsiva deler én offentlig
+IPv4-adresse mellom mange kunder, og kundeportalen sier det selv:
+portvideresending, DMZ og UPnP er utilgjengelig for kunder bak CGNAT.
+
+**Ingen utenfra kan nå noe i huset over IPv4, uansett hva som åpnes.** Lenger
+opp kalles Cloudflare Tunnel en bedre sikkerhetsposisjon enn nginx på en åpen
+443. Det stemmer, men valget fantes aldri: en tunnel som ringer ut var den
+eneste måten togkartet.no og stromkart.no kunne komme på nett. Det samme gjelder
+Tailscale.
+
+Står noen senere og lurer på hvorfor en portvideresending ikke virker: det er
+ikke oppsettet som er feil.
+
+### DHCP
+
+| | |
+|---|---|
+| Område | `192.168.2.100` – `192.168.2.249` |
+| Leasetid | 12 timer |
+| Gateway og DHCP-server | `192.168.2.1` |
+
+Ruteren er en Zyxel fra Eidsiva. Den svarer ikke med noe nettpanel fra
+hjemmenettet — testet over Wi-Fi på port 80, 443, 8080, 8443 og 8000 — og
+innstillingene over står i kundeportalen.
+
+### Adresseplan
+
+Faste adresser under `.100`, alt fra DHCP over.
+
+| Adresse | Maskin | |
+|---|---|---|
+| `.1` | ruteren | |
+| `.50` | Proxmox-verten (`server`) | fast |
+| `.51` | adguard (101) | fast i Proxmox |
+| `.52` | homepage (104) | fast i Proxmox |
+| `.55` | stromkart (105) | fast i Proxmox |
+| `.56` | **togkart (106)** | **planlagt** — DHCP `.147` per 14. september |
+| `.57` | **uptimekuma (102)** | **planlagt** — DHCP `.176` per 14. september |
+| `.58` | **skipssporer (200)** | **planlagt** — DHCP `.220` per 14. september |
+
+103 (`debian`) og VM 100 (Home Assistant) står på DHCP.
+
+### Hvorfor fast adresse i Proxmox, og ikke reservasjon i ruteren
+
+Uptime Kuma (102) mistet IPv4-adressen sin rundt 1. juli og var blind i 75
+dager uten at noen merket det. Alle overvåkerne feilet med `Network is
+unreachable`, og den kunne heller ikke sende varsel. En omstart ga den **samme
+adresse** tilbake.
+
+Feilen var altså ikke hvilken adresse ruteren delte ut, men at DHCP-klienten i
+containeren sluttet å fornye leasen. En reservasjon i ruteren hadde ikke
+hjulpet. Med 12 timers leasetid er en fornyelse som feiler i et halvt døgn nok
+til at adressen forsvinner.
+
+En fast adresse i Proxmox fjerner avhengigheten helt. Bytt `ip=dhcp` i `net0`,
+legg til `gw`, og behold `hwaddr` — ellers får containeren ny MAC-adresse:
+
+```bash
+pct set 106 -net0 name=eth0,bridge=vmbr0,firewall=1,gw=192.168.2.1,hwaddr=BC:24:11:63:9D:B1,ip=192.168.2.56/24,type=veth
+pct exec 106 -- ip -4 -brief addr show eth0
+```
+
+For togkart påvirker byttet ikke nettstedet: tunnelen ringer ut, og
+Cloudflare-ruten peker på `127.0.0.1`. DNS i containeren påvirkes heller ikke;
+Proxmox styrer den fra vertens innstillinger.
+
+Hvilke gjester som har hvilket nettverksoppsett:
+
+```bash
+for id in $(pct list | awk 'NR>1{print $1}'); do
+  echo "$id $(pct config $id | grep -E '^(hostname|net0)' | tr '\n' ' ')"
+done
+```
 
 ## Historikken vedlikeholder seg selv
 
