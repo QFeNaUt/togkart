@@ -110,7 +110,7 @@ Slik den faktisk står:
 | | |
 |---|---|
 | Vert | Proxmox, LXC **106** (`togkart`), unprivileged, Debian 13 |
-| Adresse | `192.168.2.147` fra DHCP — fast `.56` er planlagt, se «Nettverket hjemme» |
+| Adresse | `192.168.2.56`, fast i Proxmox — se «Nettverket hjemme» |
 | Ressurser | 2 kjerner, 1 GB RAM, 16 GB på `local-lvm` — appen bruker **38 MB** |
 | Python | 3.13 fra Debian, venv i `/opt/togkart/.venv` |
 | Kode | `git clone` fra <https://github.com/QFeNaUt/togkart> |
@@ -175,9 +175,9 @@ Faste adresser under `.100`, alt fra DHCP over.
 | `.51` | adguard (101) | fast i Proxmox |
 | `.52` | homepage (104) | fast i Proxmox |
 | `.55` | stromkart (105) | fast i Proxmox |
-| `.56` | **togkart (106)** | **planlagt** — DHCP `.147` per 14. september |
-| `.57` | **uptimekuma (102)** | **planlagt** — DHCP `.176` per 14. september |
-| `.58` | **skipssporer (200)** | **planlagt** — DHCP `.220` per 14. september |
+| `.56` | togkart (106) | fast i Proxmox, fra 14. september |
+| `.57` | uptimekuma (102) | fast i Proxmox, fra 14. september |
+| `.58` | skipssporer (200) | fast i Proxmox, fra 14. september |
 
 103 (`debian`) og VM 100 (Home Assistant) står på DHCP.
 
@@ -198,11 +198,21 @@ legg til `gw`, og behold `hwaddr` — ellers får containeren ny MAC-adresse:
 
 ```bash
 pct set 106 -net0 name=eth0,bridge=vmbr0,firewall=1,gw=192.168.2.1,hwaddr=BC:24:11:63:9D:B1,ip=192.168.2.56/24,type=veth
+pct reboot 106
 pct exec 106 -- ip -4 -brief addr show eth0
 ```
 
-For togkart påvirker byttet ikke nettstedet: tunnelen ringer ut, og
-Cloudflare-ruten peker på `127.0.0.1`. DNS i containeren påvirkes heller ikke;
+**Omstarten er ikke valgfri.** `pct set` på en kjørende container legger den
+faste adressen til med én gang, men DHCP-klienten som startet ved oppstart
+kjører videre og holder på den gamle leasen. Målt 14. september: alle tre
+containerne viste to adresser, for eksempel `192.168.2.147/24 192.168.2.56/24`,
+helt til de ble startet på nytt. Så lenge begge står der, er containeren
+fortsatt avhengig av DHCP. Etter omstart sto bare den faste igjen — og da vet
+du samtidig at den overlever neste strømbrudd.
+
+For togkart påvirker selve adressebyttet ikke nettstedet: tunnelen ringer ut,
+og Cloudflare-ruten peker på `127.0.0.1`. Omstarten tar det ned i noen
+sekunder. DNS i containeren påvirkes heller ikke;
 Proxmox styrer den fra vertens innstillinger.
 
 Hvilke gjester som har hvilket nettverksoppsett:
