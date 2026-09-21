@@ -370,4 +370,14 @@ def main() -> int:
 
 
 if __name__ == "__main__":
+    import historikk
+
+    # Uten disse tre leser proben `historikk.db` i prosjektroten - en tom fil -
+    # i stedet for HISTORIKK_DB. Se `historikk.les_env()`. Den tredje er ikke
+    # overflødig: `status()` i vedlikehold.py leser MODULENS egen kopi, og
+    # punkt 1 og 3 her går gjennom den.
+    historikk.les_env()
+    DB_PATH = historikk.DB_PATH
+    vedlikehold.DB_PATH = historikk.DB_PATH
+
     sys.exit(main())

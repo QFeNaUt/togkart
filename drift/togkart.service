@@ -26,6 +26,24 @@ ExecStart=/opt/togkart/.venv/bin/uvicorn app:app \
 Restart=always
 RestartSec=5
 
+# Taket på TJENESTEN, ikke på containeren. Lagt inn 21. september 2026, etter at
+# appen spiste opp LXC-ens 1 GB og tok `cloudflared` med seg: containeren gikk i
+# reclaim-storm, QUIC-forbindelsene timet ut, og togkartet.no svarte Cloudflare
+# Error 1033 i timevis mens appen selv kom opp igjen for hver OOM.
+#
+# Med et tak her dør uvicorn alene, Restart=always har den oppe etter fem
+# sekunder, og tunnelen merker det aldri. Du bytter timer med 1033 mot et blunk.
+#
+# Tallene forutsetter 2 GB i containeren og et arbeidssett på ~900 MB - se
+# «Minnet er det som binder» i drift/README.md. Endrer du `-memory` på LXC-en,
+# skal disse følge etter.
+#
+# Sjekk at cgroup-delegeringen faktisk tok:
+#   systemctl show togkart -p MemoryHigh -p MemoryMax
+# Står de som "infinity", håndhever ikke systemd dem, og vernet finnes ikke.
+MemoryHigh=1400M
+MemoryMax=1600M
+
 # Appen skriver til én fil og leser resten. Da kan resten være skrivebeskyttet.
 ProtectSystem=strict
 ProtectHome=true

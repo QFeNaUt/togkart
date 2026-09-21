@@ -17,14 +17,15 @@ Sikkerhetsgjennomgangen står i [../docs/sikkerhet.md](../docs/sikkerhet.md).
 
 ## Kan den kjøre på M720Q-en?
 
-Ja, og med svært god margin. Målt på appen som den står:
+Ja, men marginen er mindre enn denne seksjonen påsto fram til 21.
+september 2026. Målt på appen som den står:
 
 | | Målt |
 |---|---|
-| Minne, uvicorn-prosessen | **72 MB** arbeidssett, 59 MB privat |
+| Minne, uvicorn-prosessen | **~900 MB** arbeidssett i drift, målt 21. september 2026. Her sto det **72 MB** fram til da, og det tallet er grunnen til at LXC-en ble gitt 1 GB. Se «Minnet er det som binder» under |
 | CPU i ro | tilnærmet null — én Entur-henting per 60 s fra bakgrunnsjobben, oftere bare hvis noen ser på |
 | Disk, statiske filer | 342 kB til sammen (`hovedbaner.geojson` er den store med 181 kB) |
-| Disk, historikk | **Anslag etter 14. september: ~37 MB i døgnet, ~3,3 GB i likevekt.** De gamle tallene — 5 MB og 443 MB — ble målt før bakgrunnsjobben, altså på data som bare ble samlet inn når noen så på kartet. **Mål veksten selv det første døgnet** i stedet for å stole på anslaget |
+| Disk, historikk | **Målt over 9 døgn, 13.–21. september 2026: 78 731 rader i døgnet, 178,6 MB til sammen, 1 786 MB i likevekt med 90 dagers rotasjon.** Anslagene som sto her — 37 MB i døgnet og 3,3 GB — var for høye. `vedlikehold.py --status` skriver ut alle tre tallene selv |
 | Utgående nett | konstant, uavhengig av antall besøkende — cachene deler ett kall mellom alle faner |
 
 Den siste raden er den viktigste for driftsbildet: **belastningen mot Entur
@@ -34,6 +35,51 @@ det er en oppgave en mini-PC ikke merker.
 
 En M720Q — typisk i5-8500T med 8–32 GB — er kraftig overdimensjonert for dette.
 Du kjører allerede stromkart.no på samme maskin, så mønsteret er bevist.
+
+## Minnet er det som binder
+
+Skrevet 21. september 2026, etter at togkartet.no lå nede med **Cloudflare
+Error 1033** og tallene over var årsaken.
+
+**Appen bruker ~900 MB, ikke 38 MB.** De 72 og 38 MB-ene i tabellene over ble
+målt i august, før sporgeometrien og før bakgrunnsjobben. `Sportrase` i
+`sporgeometri.py` holder `punkter: list[Punkt]` og `kumulativ: list[float]` —
+to parallelle lister av Python-objekter per trasé — og `_FORBEREDT` i
+`sjnord.py` holder én trasé per tur uten målt posisjon. Det fyller seg opp over
+de første ti minuttene etter oppstart og flater ut rundt 900 MB. Det er ikke en
+lekkasje: RSS synker sakte etterpå, og alle mellomlagrene i appen er avgrenset.
+
+**Containeren hadde 1024 MB.** Appen lå dermed på rundt 90 % av taket fra
+13. september, og arbeidssettet svinger med hvor mange tog som trenger
+sporgeometri gjennom døgnet. 20.–21. september fikk det ikke plass:
+
+```
+oom_kill 2                  uvicorn drept, Restart=always startet den igjen
+high 83178210               83 millioner reclaim-hendelser - 86 % CPU på å lete
+                            etter minne som ikke fantes
+```
+
+**Og det var ikke appen som tok ned nettstedet.** `Restart=always` gjorde
+jobben sin hver gang. Det som falt var `cloudflared`, som kjører i samme
+container og ble sultet så hardt at QUIC-handshakene timet ut. Cloudflare mistet
+alle fire forbindelsene og svarte 1033 i timevis, mens appen selv var oppe.
+
+Tre ting fulgte av det:
+
+1. **2 GB, ikke 1.** `pct set 106 -memory 2048`, og det står i
+   containerkonfigurasjonen så det overlever omstart. Verten har 7,6 GB totalt
+   og ~2,4 GB ledig — **ikke hev videre uten å se på `free -h` først.**
+2. **`MemoryHigh` og `MemoryMax` i `togkart.service`.** Et tak på tjenesten
+   gjør at en app som løper løpsk dør alene i stedet for å dra hele containeren
+   med seg. Da overlever tunnelen, og du får et blunk i stedet for timer.
+3. **Mål, ikke gjett.** To hypoteser ble forkastet på måling underveis:
+   vedlikeholdsjobben topper på **61 MB**, ikke hundrevis, og ingen av
+   mellomlagrene i appen vokser fritt. Kommandoene som avgjorde det står i
+   `../docs/feilsoking.md` under «Siden er nede og `pct exec` henger».
+
+Veien tilbake til et beskjedent fotavtrykk går gjennom `Sportrase`:
+`array("d")` i stedet for lister av Python-objekter kutter de 900 MB-ene med
+rundt en tierpotens, og binærsøket virker like godt mot en `array`. Ikke gjort.
 
 ## Hva som skal til
 
@@ -111,7 +157,7 @@ Slik den faktisk står:
 |---|---|
 | Vert | Proxmox, LXC **106** (`togkart`), unprivileged, Debian 13 |
 | Adresse | `192.168.2.56`, fast i Proxmox — se «Nettverket hjemme» |
-| Ressurser | 2 kjerner, 1 GB RAM, 16 GB på `local-lvm` — appen bruker **38 MB** |
+| Ressurser | 2 kjerner, **2 GB RAM**, 16 GB på `local-lvm` — appen bruker **~900 MB**. Sto på 1 GB og «38 MB» til 21. september; se «Minnet er det som binder» |
 | Python | 3.13 fra Debian, venv i `/opt/togkart/.venv` |
 | Kode | `git clone` fra <https://github.com/QFeNaUt/togkart> |
 | Tjeneste | systemd, `togkart.service`, uvicorn på `127.0.0.1:8000` |

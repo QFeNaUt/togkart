@@ -491,6 +491,13 @@ def _skriv_rush(data: dict) -> None:
 if __name__ == "__main__":
     # Kjør:  python analyse.py
     # Ingen nett, ingen server - bare det som allerede står i historikk.db.
+    import historikk
+
+    # Uten disse to leser verktøyet `historikk.db` i prosjektroten - en tom
+    # fil - i stedet for HISTORIKK_DB. Se `historikk.les_env()`.
+    historikk.les_env()
+    DB_PATH = historikk.DB_PATH
+
     logging.basicConfig(level=logging.INFO, format="%(message)s")
     if not os.path.exists(DB_PATH):
         raise SystemExit(f"Fant ingen database på '{DB_PATH}'. "

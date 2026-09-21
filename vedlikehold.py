@@ -942,4 +942,11 @@ def main() -> int:
 
 
 if __name__ == "__main__":
+    import historikk
+
+    # Uten disse to leser verktøyet `historikk.db` i prosjektroten - en tom
+    # fil - i stedet for HISTORIKK_DB. Se `historikk.les_env()`.
+    historikk.les_env()
+    DB_PATH = historikk.DB_PATH
+
     sys.exit(main())

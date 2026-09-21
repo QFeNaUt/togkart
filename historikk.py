@@ -32,6 +32,10 @@ from sporgeometri import avstand_m
 
 log = logging.getLogger("togkart")
 
+# Leses ved IMPORT, ikke ved bruk, og det er en felle verdt å kjenne.
+# `app.py` kaller load_dotenv() før alt annet, og systemd setter
+# EnvironmentFile i tillegg, så serveren treffer alltid riktig fil. Et verktøy
+# startet for hånd gjør ingen av delene. Se `les_env()`.
 DB_PATH = os.getenv("HISTORIKK_DB", "historikk.db")
 
 # Hvor lenge en tilkobling venter på at en annen skal slippe låsen før den gir
@@ -165,6 +169,32 @@ KODESPAKE_BEREGNET = "SJN"
 # ved skriving, så en beregnet rad er aldri uten operatør til å begynne med.
 # Se `_etterfyll`.
 BEREGNET_BARE_SJN_FOR = "2026-08-21"
+
+
+def les_env() -> None:
+    """Last `.env` og utled `DB_PATH` på nytt. For verktøy kjørt fra kommandolinja.
+
+    `DB_PATH` bindes ved import, og de fire verktøyene som leser historikken -
+    `vedlikehold.py`, `analyse.py`, `flaskehals.py` og
+    `prober/sjekk_historikk.py` - importerer den før noen har lest `.env`. De
+    tok derfor standardverdien `historikk.db` i prosjektroten i stedet for
+    `HISTORIKK_DB`, og rapporterte trygt om en tom fil uten å si fra at det var
+    det de gjorde. Målt på serveren 21. september: `vedlikehold.py` meldte
+    `dogn: 0` mot en base som i virkeligheten hadde 708 576 rader.
+
+    Kalles fra `__main__`, ikke ved import: en modul brukt som bibliotek skal
+    ikke ha bivirkninger, og `app.py` har sin egen `load_dotenv()`.
+
+    **Kallerne må hente verdien tilbake etterpå** - `DB_PATH =
+    historikk.DB_PATH` - fordi `from historikk import DB_PATH` lager en kopi
+    som ikke følger med når denne endrer originalen. Det er nettopp den kopien
+    som var feilen.
+    """
+    global DB_PATH
+    from dotenv import load_dotenv
+
+    load_dotenv()
+    DB_PATH = os.getenv("HISTORIKK_DB", "historikk.db")
 
 
 # ---------------------------------------------------------------------------

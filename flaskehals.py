@@ -79,7 +79,9 @@ from sporgeometri import avstand_m, avstand_til_strekning
 
 log = logging.getLogger(__name__)
 
-DB_PATH = os.getenv("HISTORIKK_DB", "historikk.db")
+# Ingen DB_PATH her. Den sto her til 21. september, ble aldri brukt av noe i
+# denne modulen, og var en kopi til av en verdi som skal utledes ett sted.
+# `kobling()` i historikk.py eier stien.
 STASJONER = os.path.join("static", "stasjoner.geojson")
 
 # ---------------------------------------------------------------------------
@@ -553,6 +555,12 @@ if __name__ == "__main__":
     # Kjør:  python flaskehals.py
     # Viser de samme tallene kartet ville tegnet, uten server og nettleser.
     import sys
+
+    import historikk
+
+    # Uten denne leser verktøyet `historikk.db` i prosjektroten - en tom fil -
+    # i stedet for HISTORIKK_DB. Se `historikk.les_env()`.
+    historikk.les_env()
 
     if hasattr(sys.stdout, "reconfigure"):
         sys.stdout.reconfigure(encoding="utf-8")
