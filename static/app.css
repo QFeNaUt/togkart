@@ -830,11 +830,35 @@ html, body {
   background: var(--f, var(--c-unknown));
 }
 
+/* Avsnittene i en begrepsforklaring trenger luft mellom seg. Båndtooltipen
+   har to korte linjer og klarer seg uten. */
+.tip .tip-avsnitt + .tip-avsnitt { margin-top: 6px; }
+
 /* Sektorene og fordelingsradene er interaktive. Pekeren sier det før man
    prøver. */
 #donut .donut-seg { cursor: help; }
 .row[data-band] { cursor: help; }
 .row[data-band]:hover, .row[data-band]:focus-visible { color: var(--text); }
+
+/* Begreper med en forklaring bak seg, i dag medianen i historikkpanelet.
+   Den stiplede streken er hele signalet om at det finnes noe å holde
+   markøren over — uten den måtte man oppdaget funksjonen ved et uhell, og en
+   forklaring ingen finner er ingen forklaring.
+
+   Streken og ikke en fargeendring på hover, slik fordelingsradene bruker:
+   medianen bærer båndfargen sin, og den fargen betyr noe. Overstyrer vi den,
+   sier tallet plutselig noe annet om punktligheten enn det gjorde i hvile. */
+[data-tip] {
+  cursor: help;
+  text-decoration: underline dotted;
+  text-decoration-color: var(--border);
+  text-underline-offset: 3px;
+}
+
+[data-tip]:hover,
+[data-tip]:focus-visible {
+  text-decoration-color: currentColor;
+}
 
 /* --- Varsel --------------------------------------------------------------- */
 

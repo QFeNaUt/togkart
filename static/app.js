@@ -2012,6 +2012,31 @@ const tip = document.getElementById("tip");
 const TIP_AVSTAND = 14;
 const TIP_MARG = 8;
 
+/* Tooltipen dekker to slags mål, og de slår opp i hver sin tabell:
+ * punktlighetsbåndene gjennom `data-band` i BANDS, og enkeltbegreper i
+ * historikkpanelet gjennom `data-tip` her.
+ *
+ * Teksten ligger i en tabell og ikke i attributtet, av samme grunn som
+ * BANDS.hjelp gjør det: den skal stå ett sted, ikke bli klippet og limt inn
+ * i hver render-funksjon som tilfeldigvis viser tallet. */
+const FORKLARINGER = {
+  median: {
+    tittel: "Medianavvik",
+    avsnitt: [
+      "Halvparten av turene hadde mindre avvik enn dette, halvparten mer. " +
+        "Står det 0:47, brukte en typisk tur 47 sekunder mer enn rutetiden.",
+      "Median og ikke gjennomsnitt: ett tog som blir stående i halvannen time " +
+        "ville dratt et gjennomsnitt langt opp og fått en ellers presis dag til " +
+        "å se ille ut. Medianen rikkes ikke av enkelthendelser.",
+      "Minustegn betyr før rutetid. Det teller også som i rute.",
+    ],
+  },
+};
+
+// Begge slags mål fanges av én lytter. Står den bare på [data-band], finnes
+// forklaringene i historikkpanelet ikke for noen.
+const TIP_VELGER = "[data-band], [data-tip]";
+
 function tipInnhold(band, antall) {
   const tall = antall === null
     ? ""
@@ -2031,6 +2056,19 @@ function tipInnhold(band, antall) {
     </div>
     ${intervall}
     <div>${band.hjelp}</div>`;
+}
+
+/* En forklaring på ett begrep. Ingen swatch og ingen tall - den handler om
+ * hva noe BETYR, ikke om hvor mye av det som er målt, og en fargeprikk uten
+ * et bånd bak seg ville lovet en sammenheng som ikke finnes. */
+function tipForklaring(forklaring) {
+  return `
+    <div class="tip-head">
+      <span class="tip-navn">${forklaring.tittel}</span>
+    </div>
+    ${forklaring.avsnitt
+      .map((tekst) => `<div class="tip-avsnitt">${tekst}</div>`)
+      .join("")}`;
 }
 
 /* Plasser tooltipen ved (x, y), men innenfor vinduet. Måling skjer etter at
@@ -2058,6 +2096,16 @@ function plasserTip(x, y) {
 }
 
 function visTip(element, x, y) {
+  // Begrepsforklaringene først: de har ingen tall å lete etter, så de er ute
+  // av veien før båndoppslaget under i det hele tatt begynner.
+  const forklaring = FORKLARINGER[element.dataset.tip];
+  if (forklaring) {
+    tip.innerHTML = tipForklaring(forklaring);
+    tip.hidden = false;
+    plasserTip(x, y);
+    return;
+  }
+
   const band = BANDS.find((b) => b.id === element.dataset.band);
   if (!band) return;
 
@@ -2082,12 +2130,12 @@ function skjulTip() {
 const tipRot = sheet;
 
 tipRot.addEventListener("mouseover", (event) => {
-  const mal = event.target.closest("[data-band]");
+  const mal = event.target.closest(TIP_VELGER);
   if (mal) visTip(mal, event.clientX, event.clientY);
 });
 
 tipRot.addEventListener("mousemove", (event) => {
-  if (!tip.hidden && event.target.closest("[data-band]")) {
+  if (!tip.hidden && event.target.closest(TIP_VELGER)) {
     plasserTip(event.clientX, event.clientY);
   }
 });
@@ -2095,14 +2143,14 @@ tipRot.addEventListener("mousemove", (event) => {
 tipRot.addEventListener("mouseout", (event) => {
   // Bare når markøren forlater båndet helt. Beveger den seg mellom to
   // elementer inne i samme rad, skal tooltipen bli stående.
-  const mal = event.target.closest("[data-band]");
+  const mal = event.target.closest(TIP_VELGER);
   if (mal && !mal.contains(event.relatedTarget)) skjulTip();
 });
 
 /* Tastatur: fordelingsradene har tabindex, så de kan fokuseres. Tooltipen
  * plasseres da ved raden i stedet for ved markøren, som ikke har flyttet seg. */
 tipRot.addEventListener("focusin", (event) => {
-  const mal = event.target.closest("[data-band]");
+  const mal = event.target.closest(TIP_VELGER);
   if (!mal) return;
   const boks = mal.getBoundingClientRect();
   visTip(mal, boks.right, boks.bottom);
@@ -2795,7 +2843,9 @@ const prosent = (andel) => `${Math.round(andel * 100)} %`;
  * i rushfanen er hovedtallet selve medianen og får båndfargen, i
  * operatørfanen er det en andel, og en andel har ingen båndfarge. Da står
  * den nøytralt, og båndfargen flyttes ned på medianen i detaljlinja. */
-function histRad({ plass, navn, merke, tall, tallFarge, detalj, andel, sekunder }) {
+function histRad({
+  plass, navn, merke, tall, tallFarge, tallTip, detalj, andel, sekunder,
+}) {
   const klasse = fargeklasse(bandVar(sekunder));
   // Bredden er den ene verdien som ikke kan bli en klasse - den er
   // kontinuerlig, én per rad. Den settes gjennom CSSOM av settBarBredder()
@@ -2804,7 +2854,9 @@ function histRad({ plass, navn, merke, tall, tallFarge, detalj, andel, sekunder 
     <div class="hist-rad">
       <span class="hist-plass">${esc(plass)}</span>
       <span class="hist-navn">${esc(navn)}${merke || ""}</span>
-      <span class="hist-tall${tallFarge ? " " + klasse : ""}">${esc(tall)}</span>
+      <span class="hist-tall${tallFarge ? " " + klasse : ""}"${
+        tallTip ? ` data-tip="${tallTip}" tabindex="0"` : ""
+      }>${esc(tall)}</span>
       <span class="hist-detalj">${detalj}</span>
       <span class="hist-bar">
         <span class="${klasse}" data-andel="${Math.round(andel * 100)}"></span>
@@ -2852,7 +2904,8 @@ function renderOperatorer(data) {
         tall: prosent(o.andelIRute),
         detalj:
           `median <span class="hist-median ` +
-          `${fargeklasse(bandVar(o.medianAvvikSekunder))}">` +
+          `${fargeklasse(bandVar(o.medianAvvikSekunder))}" ` +
+          `data-tip="median" tabindex="0">` +
           `${mmss(o.medianAvvikSekunder)}</span> · ` +
           `${esc(o.turer)} ${o.turer === 1 ? "tur" : "turer"} · ${esc(o.linjer)} linjer`,
         andel: o.andelIRute,
@@ -2894,6 +2947,7 @@ function renderRush(data) {
             navn: s.linje,
             tall: mmss(s.medianAvvikSekunder),
             tallFarge: true,
+            tallTip: "median",
             detalj:
               `${esc(s.strekning)} · ${esc(s.turer)} turer · ` +
               `${prosent(s.andelIRute)} i rute`,
