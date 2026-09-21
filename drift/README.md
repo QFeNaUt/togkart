@@ -22,7 +22,7 @@ september 2026. Målt på appen som den står:
 
 | | Målt |
 |---|---|
-| Minne, uvicorn-prosessen | **~630 MB** i platå, **~1 110 MB på topp** under oppvarming. Målt 21. september 2026, etter at traseene ble lagt flatt; før den endringen samme dag var platået ~890 MB. Her sto det **72 MB** fram til da, og det tallet er grunnen til at LXC-en ble gitt 1 GB. Se «Minnet er det som binder» under |
+| Minne, uvicorn-prosessen | **~630 MB** i platå, **1 122 MB på topp** under oppvarming. Målt 21. september 2026, etter at traseene ble lagt flatt; før den endringen samme dag var platået ~890 MB. Her sto det **72 MB** fram til da, og det tallet er grunnen til at LXC-en ble gitt 1 GB. Se «Minnet er det som binder» under |
 | CPU i ro | tilnærmet null — én Entur-henting per 60 s fra bakgrunnsjobben, oftere bare hvis noen ser på |
 | Disk, statiske filer | 342 kB til sammen (`hovedbaner.geojson` er den store med 181 kB) |
 | Disk, historikk | **Målt over 9 døgn, 13.–21. september 2026: 78 731 rader i døgnet, 178,6 MB til sammen, 1 786 MB i likevekt med 90 dagers rotasjon.** Anslagene som sto her — 37 MB i døgnet og 3,3 GB — var for høye. `vedlikehold.py --status` skriver ut alle tre tallene selv |
@@ -120,7 +120,7 @@ Målt på serveren rett etter utrulling, samme prosess fulgt i tolv minutter:
 | | Platå | Topp under oppvarming |
 |---|---|---|
 | Før | ~890 MB | — |
-| Etter | **~630 MB** | **~1 110 MB** |
+| Etter | **~630 MB** | **1 122 MB** |
 
 **260 MB spart, rundt 29 %.** Regnet baklengs fra faktoren 6,1 var traseene
 altså rundt 310 MB av de gamle 890, og er nå ~51 MB. De resterende ~580 MB er
@@ -131,20 +131,23 @@ avvikscachen og uvicorn selv. **Det tallet er utledet, ikke målt**, og er verdt
 **Toppen er nå høyere enn platået, og det er verdt å vite.** `fra_punkter` tar
 imot `list[Punkt]` fra `decode_polyline` og bygger arrayet ut av den, så mens
 en trasé konstrueres finnes begge representasjonene samtidig. Med 60 nye
-traseer per runde under oppvarming gir det ~1 110 MB. Det er innenfor
-`MemoryHigh=1400M`, men bare med 290 MB margin — og marginen spises av en
-travlere dag med flere turer uten GPS.
+traseer per runde under oppvarming gir det **1 122 MB**, avlest som
+høyvannsmerke i `memory.peak` og ikke stukket ut av en prøve.
 
-To ting å gjøre hvis den marginen blir for tynn: la `decode_polyline` skrive
-rett inn i et `array("d")` så mellomlista aldri finnes, eller hev taket i
-`togkart.service`. Den første er den riktige; den andre er den raske.
-
-Om toppen faktisk har truffet taket, sier cgruppen selv:
+Marginen er 278 MB opp til `MemoryHigh=1400M` og 478 MB opp til
+`MemoryMax=1600M`, og `memory.events` står på `high 0` — strupingen har aldri
+slått inn. Det er godt nok, og feilmodusen er dessuten mild: `MemoryHigh`
+bremser, den dreper ikke. Men marginen spises av en travlere dag med flere
+turer uten GPS, så den er verdt å lese av igjen når noe endrer seg:
 
 ```bash
 cat /sys/fs/cgroup/system.slice/togkart.service/memory.peak    # høyvannsmerket
 cat /sys/fs/cgroup/system.slice/togkart.service/memory.events  # `high` over 0 = strupet
 ```
+
+Blir den for tynn, er det to veier: la `decode_polyline` skrive rett inn i et
+`array("d")` så mellomlista aldri finnes, eller heve taket i
+`togkart.service`. Den første er den riktige; den andre er den raske.
 
 ## Hva som skal til
 
@@ -222,7 +225,7 @@ Slik den faktisk står:
 |---|---|
 | Vert | Proxmox, LXC **106** (`togkart`), unprivileged, Debian 13 |
 | Adresse | `192.168.2.56`, fast i Proxmox — se «Nettverket hjemme» |
-| Ressurser | 2 kjerner, **2 GB RAM**, 16 GB på `local-lvm` — appen bruker **~630 MB** i platå og ~1 110 MB på topp. Sto på 1 GB og «38 MB» til 21. september; se «Minnet er det som binder» |
+| Ressurser | 2 kjerner, **2 GB RAM**, 16 GB på `local-lvm` — appen bruker **~630 MB** i platå og 1 122 MB på topp. Sto på 1 GB og «38 MB» til 21. september; se «Minnet er det som binder» |
 | Python | 3.13 fra Debian, venv i `/opt/togkart/.venv` |
 | Kode | `git clone` fra <https://github.com/QFeNaUt/togkart> |
 | Tjeneste | systemd, `togkart.service`, uvicorn på `127.0.0.1:8000` |
