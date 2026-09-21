@@ -74,3 +74,10 @@ jobs:
       # ikke databasen, så den kan kjøre her uten en historikk.db.
       - name: Historikkens minne
         run: python historikk.py --selvtest
+
+      # Node ligger på ubuntu-latest, så dette trenger ingen setup-node.
+      # Testen er her fordi TRYKKVEIEN I TOOLTIPEN ER USYNLIG FRA EN PC: den
+      # kan brytes av en hvilken som helst endring i lytterne uten at noe ser
+      # galt ut for den som gjør endringen. Sånn kom feilen inn første gang.
+      - name: Tooltipen på berøring, mus og tastatur
+        run: node prober/test_tooltip.mjs

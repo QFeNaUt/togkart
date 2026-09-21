@@ -2037,6 +2037,26 @@ const FORKLARINGER = {
 // forklaringene i historikkpanelet ikke for noen.
 const TIP_VELGER = "[data-band], [data-tip]";
 
+/* Berøring har ingen hover, og de syntetiske museventene en telefon sender
+ * etter et trykk er ikke til å bygge på: rekkefølgen varierer mellom
+ * nettlesere, `mouseout` kommer ved neste trykk et helt annet sted, og
+ * tooltipen ville uansett havnet under fingeren som nettopp pekte på tallet.
+ *
+ * `(hover: hover)` skiller de to verdenene én gang, i stedet for at hver
+ * håndterer skal gjette. På en telefon eier TRYKKET tooltipen; på alt som har
+ * en peker eier hover den. Bredde ville vært feil mål - en telefon er ikke
+ * definert ved å være smal, men ved at det ikke finnes noen markør å hvile.
+ *
+ * Meldt på Galaxy S24 Ultra 21. september: tallet svarte ikke på trykk i det
+ * hele tatt. Det gjaldt ringdiagrammet og fordelingsradene like mye - de har
+ * hatt samme begrensning siden tooltipen ble laget, uten at noen sa fra. */
+const HAR_HOVER = window.matchMedia("(hover: hover)");
+
+// Hva trykket sist åpnet. Bare trykkveien setter den, slik at et nytt trykk
+// på samme tall lukker igjen. Fokusveien holdes utenfor: skrur den på denne,
+// ville et trykk som både fokuserer og klikker åpnet og lukket i samme bevegelse.
+let trykkMal = null;
+
 function tipInnhold(band, antall) {
   const tall = antall === null
     ? ""
@@ -2123,6 +2143,7 @@ function visTip(element, x, y) {
 
 function skjulTip() {
   tip.hidden = true;
+  trykkMal = null;
 }
 
 /* Sheetet er felles opphav for både #donut og #breakdown, på mobil som på
@@ -2130,17 +2151,20 @@ function skjulTip() {
 const tipRot = sheet;
 
 tipRot.addEventListener("mouseover", (event) => {
+  if (!HAR_HOVER.matches) return;
   const mal = event.target.closest(TIP_VELGER);
   if (mal) visTip(mal, event.clientX, event.clientY);
 });
 
 tipRot.addEventListener("mousemove", (event) => {
+  if (!HAR_HOVER.matches) return;
   if (!tip.hidden && event.target.closest(TIP_VELGER)) {
     plasserTip(event.clientX, event.clientY);
   }
 });
 
 tipRot.addEventListener("mouseout", (event) => {
+  if (!HAR_HOVER.matches) return;
   // Bare når markøren forlater båndet helt. Beveger den seg mellom to
   // elementer inne i samme rad, skal tooltipen bli stående.
   const mal = event.target.closest(TIP_VELGER);
@@ -2157,6 +2181,35 @@ tipRot.addEventListener("focusin", (event) => {
 });
 
 tipRot.addEventListener("focusout", skjulTip);
+
+/* Trykk. Tooltipen plasseres ved ELEMENTET og ikke ved fingeren - et trykk
+ * har ingen «ved siden av», og 14 piksler fra et fingeravtrykk er fortsatt
+ * under fingeren. `plasserTip` speiler den selv om den ikke får plass under.
+ *
+ * Et nytt trykk på samme tall lukker igjen. Uten det måtte man treffe noe
+ * annet for å bli kvitt den, og på en telefon er «noe annet» som regel
+ * kartet - som da ville panorert i stedet. */
+tipRot.addEventListener("click", (event) => {
+  if (HAR_HOVER.matches) return;
+  const mal = event.target.closest(TIP_VELGER);
+  if (!mal) return;
+
+  if (mal === trykkMal) {
+    skjulTip();
+    return;
+  }
+  const boks = mal.getBoundingClientRect();
+  visTip(mal, boks.left, boks.bottom);
+  trykkMal = mal;
+});
+
+// Trykk utenfor rydder bort. Lytteren står på document og ikke på tipRot,
+// fordi det vanligste «utenfor» på en telefon er kartet, som ligger i et helt
+// annet tre. Trykk PÅ et mål håndteres over, og skal ikke lukke noe her.
+document.addEventListener("click", (event) => {
+  if (HAR_HOVER.matches) return;
+  if (!event.target.closest(TIP_VELGER)) skjulTip();
+});
 
 // En tooltip som henger igjen over et kart man har begynt å dra i, ser ut som
 // en feil. Rulling og kartbevegelse rydder den bort.

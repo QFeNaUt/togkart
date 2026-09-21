@@ -40,6 +40,7 @@ python prober/test_geometri.py         # regresjonstest, interpolasjon
 python prober/test_dobbeltsett.py      # regresjonstest, dobbeltsett
 python prober/test_ferdige.py          # regresjonstest, ferdige tog og endestasjon
 python prober/test_telling.py          # regresjonstest, ringdiagrammets telling
+node prober/test_tooltip.mjs           # regresjonstest, tooltipen på berøring og mus
 python prober/sjekk_flaskehals.py      # varmekartet: geometri og utvalg
 python prober/sjekk_strupe.py --uten-server
 python prober/sjekk_headere.py         # sikkerhetsheadere og CSP. Kjør også med TOGKART_MILJO=prod
@@ -108,6 +109,8 @@ den skal se det kartet ser, etter at begge kildene er slått sammen.
 | Flere linjer sier nesten det samme | `MIN_GRUPPE` i `avvik.py` | Punkt 3: sammendrag som gjentar seg uten å bli gruppert |
 | En gruppe ble slått for hardt sammen | `GRUPPE_MAKS_SAMMENDRAG` i `avvik.py` | Punkt 3 lister hva som står for flere avganger |
 | Alt i stripa har samme farge | `prober/sjekk_avvik.py` | Punkt 2: hvilken regel avgjorde hver melding |
+| Tooltipen svarer ikke på trykk på mobil | `node prober/test_tooltip.mjs` | Hele tooltipen hang på hover til 21. september, og en telefon har ingen. `HAR_HOVER` i `app.js` skiller de to verdenene; faller trykkveien bort, går testen rødt |
+| Tooltipen blinker eller legger seg under fingeren | `node prober/test_tooltip.mjs` | De syntetiske museventene en telefon sender etter et trykk har sluppet gjennom. Musehåndtererne skal returnere med én gang når `HAR_HOVER.matches` er usann |
 | Stripa gjentar seg selv | `prober/sjekk_avvik.py` | Punkt 3: ble noe slått sammen i det hele tatt |
 | Klikk på en melding gjør ingenting | `prober/sjekk_avvik.py` | Punkt 4: har meldingen steder å fly til |
 | Hvordan ser stripa ut nå? | `python avvik.py` | Meldingene i rekkefølge, uten server og nettleser |
