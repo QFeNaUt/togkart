@@ -31,6 +31,7 @@ Selvtest
 from __future__ import annotations
 
 import math
+from array import array
 from bisect import bisect_right
 from dataclasses import dataclass
 
@@ -231,20 +232,26 @@ def retning_langs_spor(
     return retning_grader(bak, fram)
 
 
-def _projiser_pa_segment(punkt: Punkt, a: Punkt, b: Punkt) -> tuple[float, float]:
+def _projiser_pa_koordinater(
+    plon: float, plat: float,
+    alon: float, alat: float,
+    blon: float, blat: float,
+) -> tuple[float, float]:
     """
-    Finner nærmeste punkt på linjestykket a→b.
+    Samme som `_projiser_pa_segment`, men på rå tall i stedet for tupler.
 
-    Returnerer (t, avvik_m), der t mellom 0 og 1 sier hvor langs segmentet det
-    nærmeste punktet ligger, og avvik_m er avstanden dit fra `punkt`.
+    Skilt ut 21. september 2026 for `Sportrase.projiser`, som er den varme
+    løkka: den går gjennom titusenvis av segmenter per stopp, og traseen
+    lagrer nå koordinatene flatt. Tok den tupler, måtte løkka bygget to av dem
+    per segment — nøyaktig de objektene omleggingen var ment å bli kvitt.
     """
-    midt_lat = (a[1] + b[1]) / 2
+    midt_lat = (alat + blat) / 2
     sx = _m_per_grad_lon(midt_lat)
     sy = M_PER_GRAD_LAT
 
-    ax, ay = a[0] * sx, a[1] * sy
-    bx, by = b[0] * sx, b[1] * sy
-    px, py = punkt[0] * sx, punkt[1] * sy
+    ax, ay = alon * sx, alat * sy
+    bx, by = blon * sx, blat * sy
+    px, py = plon * sx, plat * sy
 
     dx, dy = bx - ax, by - ay
     lengde2 = dx * dx + dy * dy
@@ -259,6 +266,18 @@ def _projiser_pa_segment(punkt: Punkt, a: Punkt, b: Punkt) -> tuple[float, float
     return t, math.hypot(px - naer_x, py - naer_y)
 
 
+def _projiser_pa_segment(punkt: Punkt, a: Punkt, b: Punkt) -> tuple[float, float]:
+    """
+    Finner nærmeste punkt på linjestykket a→b.
+
+    Returnerer (t, avvik_m), der t mellom 0 og 1 sier hvor langs segmentet det
+    nærmeste punktet ligger, og avvik_m er avstanden dit fra `punkt`.
+    """
+    return _projiser_pa_koordinater(
+        punkt[0], punkt[1], a[0], a[1], b[0], b[1]
+    )
+
+
 # ---------------------------------------------------------------------------
 # 3. Traseen
 # ---------------------------------------------------------------------------
@@ -268,32 +287,80 @@ class Sportrase:
     """
     En trasé med forhåndsberegnede avstander.
 
-    `kumulativ[i]` er antall meter fra start fram til `punkter[i]`. Den listen
-    beregnes én gang, og gjør oppslag underveis til et binærsøk i stedet for en
-    ny summering av hele linjen.
+    Koordinatene ligger FLATT i `xy` - lon0, lat0, lon1, lat1, ... - og ikke
+    som en liste med tupler. Det er ikke mikrooptimalisering, det er det som
+    avgjør om appen får plass i containeren sin.
+
+    Målt på en trasé med 20 000 punkter, altså en Nordlandsbane:
+
+        list[tuple[float, float]] + list[float]   153 byte per punkt
+        array("d") + array("d")                    24 byte per punkt
+
+    En liste med tupler lagrer ikke to tall per punkt. Den lagrer én listeslot
+    (8 B), ett tuple-objekt (56 B) og to selvstendige `float`-objekter (24 B
+    hver) - 112 byte der dataen er 16. `array("d")` lagrer rå doubler rett
+    etter hverandre, uten objekthoder og uten pekere.
+
+    Bakgrunnen står i `drift/README.md` under «Minnet er det som binder»:
+    `_FORBEREDT` i sjnord.py holder én trasé per tur uten målt posisjon, et
+    par hundre gjennom døgnet, og det var den samlingen som fylte LXC-ens
+    minne og tok togkartet.no ned med Cloudflare Error 1033.
+
+    `kumulativ[i]` er antall meter fra start fram til punkt nr. `i`. Den
+    beregnes én gang, og gjør oppslag underveis til et binærsøk i stedet for
+    en ny summering av hele linjen. `bisect` virker like godt på en `array`
+    som på en liste.
+
+    Det finnes med vilje ingen `.punkter`. Et slikt felt ville bygget hele
+    lista med tupler på nytt ved hvert oppslag, altså gitt tilbake akkurat det
+    minnet som er spart her - og gjort det stille. Bruk `punkt(i)`.
     """
 
-    punkter: list[Punkt]
-    kumulativ: list[float]
+    xy: array          # flat: lon0, lat0, lon1, lat1, ...
+    kumulativ: array   # meter fra start, én per punkt
 
     # -- konstruktører ------------------------------------------------------
 
     @classmethod
     def fra_punkter(cls, punkter: list[Punkt]) -> "Sportrase":
-        rensede = [p for i, p in enumerate(punkter) if i == 0 or p != punkter[i - 1]]
-        if len(rensede) < 2:
+        xy = array("d")
+        forrige: Punkt | None = None
+        for p in punkter:
+            if p != forrige:
+                xy.append(p[0])
+                xy.append(p[1])
+                forrige = p
+
+        if len(xy) < 4:
             raise ValueError("En trasé trenger minst to ulike punkter")
 
-        kumulativ = [0.0]
-        for a, b in zip(rensede, rensede[1:]):
-            kumulativ.append(kumulativ[-1] + avstand_m(a, b))
-        return cls(rensede, kumulativ)
+        kumulativ = array("d", [0.0])
+        for i in range(1, len(xy) // 2):
+            j = 2 * i
+            kumulativ.append(
+                kumulativ[-1]
+                + avstand_m((xy[j - 2], xy[j - 1]), (xy[j], xy[j + 1]))
+            )
+        return cls(xy, kumulativ)
 
     @classmethod
     def fra_polylinje(cls, kodet: str, presisjon: int = 5) -> "Sportrase":
         return cls.fra_punkter(decode_polyline(kodet, presisjon))
 
     # -- oppslag ------------------------------------------------------------
+
+    def __len__(self) -> int:
+        """Antall punkter i traseen."""
+        return len(self.kumulativ)
+
+    def punkt(self, i: int) -> Punkt:
+        """Punkt nr. `i` som (lon, lat).
+
+        Tuppelet bygges her og nå. Det er hele poenget: ett kortlevd objekt
+        når noen spør, i stedet for titusenvis som ligger og venter.
+        """
+        j = 2 * i
+        return (self.xy[j], self.xy[j + 1])
 
     @property
     def lengde_m(self) -> float:
@@ -302,18 +369,20 @@ class Sportrase:
     def _segment_for(self, meter: float) -> int:
         """Indeksen til segmentet som inneholder gitt avstand fra start."""
         i = bisect_right(self.kumulativ, meter) - 1
-        return min(max(i, 0), len(self.punkter) - 2)
+        return min(max(i, 0), len(self.kumulativ) - 2)
 
     def punkt_ved(self, meter: float) -> Punkt:
         """Koordinatet som ligger `meter` inn langs traseen."""
         meter = max(0.0, min(meter, self.lengde_m))
         i = self._segment_for(meter)
         d0, d1 = self.kumulativ[i], self.kumulativ[i + 1]
-        a, b = self.punkter[i], self.punkter[i + 1]
+        j = 2 * i
+        ax, ay = self.xy[j], self.xy[j + 1]
         if d1 <= d0:
-            return a
+            return (ax, ay)
         t = (meter - d0) / (d1 - d0)
-        return (a[0] + t * (b[0] - a[0]), a[1] + t * (b[1] - a[1]))
+        bx, by = self.xy[j + 2], self.xy[j + 3]
+        return (ax + t * (bx - ax), ay + t * (by - ay))
 
     def projiser(
         self,
@@ -336,17 +405,27 @@ class Sportrase:
         gått `vindu_m` forbi det uten å finne noe bedre. Finner det aldri noe
         godt treff, skannes hele linjen — og da avviser `bygg_trase` traseen
         uansett.
+
+        Løkka leser koordinatene rett ut av `xy` og kaller
+        `_projiser_pa_koordinater`. Gikk den veien om `punkt(i)`, ville den
+        bygget to tupler per segment - titusenvis per stopp - og gitt tilbake
+        i allokering det den flate lagringen sparer i minne.
         """
+        xy, kum = self.xy, self.kumulativ
+        plon, plat = punkt
         start = self._segment_for(max(0.0, fra_meter))
         beste_d = fra_meter
         beste_avvik = float("inf")
 
-        for i in range(start, len(self.punkter) - 1):
-            t, avvik = _projiser_pa_segment(punkt, self.punkter[i], self.punkter[i + 1])
+        for i in range(start, len(kum) - 1):
+            j = 2 * i
+            t, avvik = _projiser_pa_koordinater(
+                plon, plat, xy[j], xy[j + 1], xy[j + 2], xy[j + 3]
+            )
             if avvik < beste_avvik:
                 beste_avvik = avvik
-                beste_d = self.kumulativ[i] + t * (self.kumulativ[i + 1] - self.kumulativ[i])
-            if beste_avvik <= god_nok_m and self.kumulativ[i] - beste_d > vindu_m:
+                beste_d = kum[i] + t * (kum[i + 1] - kum[i])
+            if beste_avvik <= god_nok_m and kum[i] - beste_d > vindu_m:
                 break
 
         return max(beste_d, fra_meter), beste_avvik
@@ -359,13 +438,12 @@ class Sportrase:
         """
         fra_m, til_m = sorted((max(0.0, fra_m), min(til_m, self.lengde_m)))
         ut = [self.punkt_ved(fra_m)]
-        for i in range(self._segment_for(fra_m) + 1, len(self.punkter)):
+        for i in range(self._segment_for(fra_m) + 1, len(self.kumulativ)):
             if self.kumulativ[i] >= til_m:
                 break
-            ut.append(self.punkter[i])
+            ut.append(self.punkt(i))
         ut.append(self.punkt_ved(til_m))
         return ut
-
 
 # ---------------------------------------------------------------------------
 # 4. Bruk mot stoppestedene

@@ -52,6 +52,31 @@ if ! g diff --quiet "$foer" "$etter" -- requirements.txt; then
     runuser -u "$BRUKER" -- "$ROT/.venv/bin/pip" install -q -r requirements.txt
 fi
 
+# Unit-fila følger IKKE med en `git pull`. Den skal ligge i
+# /etc/systemd/system/, og en endring i drift/ når den aldri før noen kopierer
+# den dit. Fram til 21. september gjorde ikke dette skriptet det, og samme dag
+# ble MemoryHigh/MemoryMax rullet ut uten å bli tatt i bruk: utrullingen så
+# vellykket ut, appen svarte 200, og vernet fantes ikke.
+#
+# `cmp -s` og ikke en ubetinget kopi: en daemon-reload på hver utrulling er
+# støy, og forskjellen er det eneste som er verdt å si fra om.
+UNIT=/etc/systemd/system/togkart.service
+if ! cmp -s "$ROT/drift/togkart.service" "$UNIT"; then
+    echo "togkart.service er endret - installerer den"
+
+    # Verifiser FØR kopiering. En unit som ikke parser gir en tjeneste som
+    # ikke starter, og da er det for sent at helsesjekken nedenfor sier fra.
+    # Det var dette som fanget den manglende [Unit]-linja 13. september.
+    if ! systemd-analyze verify "$ROT/drift/togkart.service"; then
+        echo "FEIL: drift/togkart.service passerer ikke systemd-analyze verify." >&2
+        echo "Unit-fila er IKKE installert, og tjenesten er urørt." >&2
+        exit 1
+    fi
+
+    install -m 0644 "$ROT/drift/togkart.service" "$UNIT"
+    systemctl daemon-reload
+fi
+
 systemctl restart togkart
 
 echo -n "Venter på at appen svarer"
@@ -60,6 +85,12 @@ for _ in $(seq 1 "$VENT"); do
         echo
         echo "$svar"
         echo
+        # Kjernens tall, ikke systemds. `systemctl show -p MemoryMax` gjengir
+        # det som STÅR i unit-fila, ikke det cgruppen faktisk håndhever - og i
+        # en unprivilegert LXC er det ikke gitt at de er like.
+        tak=$(cat /sys/fs/cgroup/system.slice/togkart.service/memory.max 2>/dev/null || echo ukjent)
+        echo "minnetak håndhevet av kjernen: $tak"
+
         echo "OK - $(g rev-parse --short HEAD) er ute."
         exit 0
     fi

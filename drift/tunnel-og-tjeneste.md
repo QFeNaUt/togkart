@@ -136,6 +136,18 @@ systemctl enable --now togkart
 systemd-analyze verify /etc/systemd/system/togkart.service   # skal være stille
 ```
 
+**Dette er førstegangsoppsettet. Senere gjør `drift/oppdater.sh` det selv** —
+den sammenligner fila i git med den i `/etc/systemd/system/`, verifiserer før
+den kopierer, og kjører `daemon-reload`. Steget kom inn 21. september, etter at
+`MemoryHigh`/`MemoryMax` ble rullet ut uten å bli tatt i bruk: `git pull` rører
+ikke `/etc/systemd/system/`, utrullingen så vellykket ut, appen svarte 200, og
+vernet fantes ikke.
+
+Og når du kontrollerer det etterpå: `systemctl show -p MemoryMax` gjengir det
+som **står** i unit-fila, ikke det cgruppen håndhever. Tallet som teller er
+`/sys/fs/cgroup/system.slice/togkart.service/memory.max`, og `oppdater.sh`
+skriver det ut til slutt.
+
 Grunnen til at den ligger i git og ikke bare som en blokk her: innliming av
 den i en nettleserkonsoll mislyktes to ganger under utrullingen 13.
 september, begge ganger ved at `[Unit]` på første linje forsvant. Resultatet

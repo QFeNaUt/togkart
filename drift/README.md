@@ -8,7 +8,7 @@ Alt som handler om at kartet står i morgen, ikke om hva det viser.
 | [tunnel-og-tjeneste.md](tunnel-og-tjeneste.md) | Cloudflare Tunnel, systemd-unit, `.env` i prod, backup av databasen |
 | [docker.md](docker.md) | Samme oppsett i container: `Dockerfile`, `compose.yaml`, cloudflared i samme nettverksnavnerom |
 | `env.produksjon` | Mal for `.env` på serveren |
-| `oppdater.sh` | Utrulling: hent, installer om nødvendig, start om, verifiser |
+| `oppdater.sh` | Utrulling: hent, installer om nødvendig, **legg ut `togkart.service` hvis den er endret**, start om, verifiser |
 | `togkart.service` | systemd-unit'en. Kopieres til `/etc/systemd/system/`, skrives ikke av |
 
 Sikkerhetsgjennomgangen står i [../docs/sikkerhet.md](../docs/sikkerhet.md).
@@ -77,9 +77,41 @@ Tre ting fulgte av det:
    mellomlagrene i appen vokser fritt. Kommandoene som avgjorde det står i
    `../docs/feilsoking.md` under «Siden er nede og `pct exec` henger».
 
-Veien tilbake til et beskjedent fotavtrykk går gjennom `Sportrase`:
-`array("d")` i stedet for lister av Python-objekter kutter de 900 MB-ene med
-rundt en tierpotens, og binærsøket virker like godt mot en `array`. Ikke gjort.
+### Traseene ligger flatt nå
+
+Gjort 21. september 2026, samme dag. `Sportrase` lagret `punkter` som en
+`list[tuple[float, float]]` og `kumulativ` som en `list[float]`. Begge er
+`array("d")` nå, med koordinatene flatt etter hverandre.
+
+Målt på en trasé med 20 000 punkter, altså en Nordlandsbane:
+
+| | Per punkt | Én trasé | 200 traseer |
+|---|---|---|---|
+| Før | 153 byte | 2,91 MB | 582 MB |
+| Nå | **25 byte** | **0,47 MB** | **95 MB** |
+
+**Faktoren er 6,1, ikke en tierpotens.** Tierpotensen sto her da seksjonen ble
+skrevet, og var et anslag ingen hadde regnet på.
+
+Grunnen til at en liste er så dyr: den lagrer ikke to tall per punkt. Den
+lagrer én listeslot (8 B), ett tuple-objekt (56 B) og to selvstendige
+`float`-objekter (24 B hver) — 112 byte der dataen er 16. En `array("d")`
+lagrer rå doubler rett etter hverandre.
+
+To ting det var verdt å passe på:
+
+- **`projiser()` leser rått ut av `xy`.** Løkka går gjennom titusenvis av
+  segmenter per stopp. Gikk den veien om et `punkt(i)`-oppslag, ville den
+  bygget to tupler per segment og gitt tilbake i allokering det den flate
+  lagringen sparer i minne. Derfor `_projiser_pa_koordinater`, som tar rå tall.
+- **Det finnes ingen `.punkter` lenger, med vilje.** En slik property ville
+  bygget hele lista med tupler på nytt ved hvert oppslag — altså gitt tilbake
+  hele besparelsen, og gjort det stille.
+
+`bisect` virker like godt på en `array` som på en liste, så binærsøket i
+`_segment_for` er urørt. Ingenting utenfor `sporgeometri.py` rørte feltene.
+Selvtesten gir samme geometri som før: F6 Hamar–Oslo lufthavn er fortsatt
+72,7 km langs spor mot 66,8 km i luftlinje, med 11,9 km største avvik.
 
 ## Hva som skal til
 
